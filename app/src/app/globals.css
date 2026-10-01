@@ -181,6 +181,22 @@ textarea {
   color: var(--text);
 }
 
+.icon-button.danger {
+  color: var(--danger);
+}
+
+.icon-button.danger:hover {
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
 .sidebar-footer {
   border-top: 1px solid var(--border);
   padding: 10px 14px;

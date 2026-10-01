@@ -110,6 +110,8 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
   const [historyOpen, setHistoryOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  /** 正在等待二次确认删除的会话 ID（删除不可撤销，因此要按两下）。 */
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   /** 主区标题的就地重命名（与左侧列表重命名同一会话属性）。 */
   const [headerRenameValue, setHeaderRenameValue] = useState<string | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -452,6 +454,45 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
     await applyRename(id, value);
   }, [activeId, applyRename, headerRenameValue]);
 
+  /**
+   * 删除会话（不可撤销）。删除当前会话后自动切到列表中最新的一条，没有则回到空白草稿。
+   * 正在生成的会话不允许删除，避免流式任务继续往已删除的记录写状态。
+   */
+  const handleDelete = useCallback(
+    async (conversationId: string): Promise<void> => {
+      setDeletingId(null);
+      if (generating && conversationId === activeId) {
+        setBanner({ kind: 'info', text: '该会话正在生成回复，请先停止生成再删除。' });
+        return;
+      }
+      try {
+        const result = await api.deleteConversation(conversationId);
+        const remaining = conversations.filter((item) => item.id !== conversationId);
+        setConversations(remaining);
+        if (activeId === conversationId) {
+          const next = remaining[0] ?? null;
+          if (next) {
+            setActiveId(next.id);
+            await loadMessages(next.id);
+          } else {
+            setActiveId(null);
+            setMessages([]);
+            setHasMore(false);
+            setNextCursor(null);
+            setDraftId(newClientId());
+          }
+        }
+        setBanner({
+          kind: 'info',
+          text: `已删除该会话及其 ${result.deletedMessages} 条消息。`,
+        });
+      } catch (error) {
+        handleFailure(error);
+      }
+    },
+    [activeId, conversations, generating, handleFailure, loadMessages],
+  );
+
   const onComposerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
       if (event.key !== 'Enter') return;
@@ -534,17 +575,59 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
                   ) : (
                     <>
                       <span className="conversation-title">{conversation.title || '未命名会话'}</span>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="重命名会话标题"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          startRename(conversation);
-                        }}
-                      >
-                        重命名
-                      </button>
+                      <span className="row-actions">
+                        {deletingId === conversation.id ? (
+                          <>
+                            <span className="conversation-meta">删除？</span>
+                            <button
+                              type="button"
+                              className="icon-button danger"
+                              title="确认删除该会话及其全部消息"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDelete(conversation.id);
+                              }}
+                            >
+                              确认
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeletingId(null);
+                              }}
+                            >
+                              取消
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="icon-button"
+                              title="重命名会话标题"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                startRename(conversation);
+                              }}
+                            >
+                              重命名
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button"
+                              title="删除该会话及其全部消息"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeletingId(conversation.id);
+                              }}
+                            >
+                              删除
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </>
                   )}
                 </div>

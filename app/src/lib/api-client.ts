@@ -5,6 +5,7 @@ import {
   type ConversationDetailResponse,
   type ConversationListResponse,
   type CreateConversationResponse,
+  type DeleteConversationResponse,
   type LoginResponse,
   type MeResponse,
   type MessageListResponse,
@@ -105,6 +106,11 @@ export const api = {
     return requestJson<ConversationDetailResponse>(`/api/conversations/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({ title }),
+    });
+  },
+  deleteConversation(id: string): Promise<DeleteConversationResponse> {
+    return requestJson<DeleteConversationResponse>(`/api/conversations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 };

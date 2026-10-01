@@ -110,6 +110,13 @@ export interface RenameConversationRequest {
   title: string;
 }
 
+export interface DeleteConversationResponse {
+  deleted: true;
+  id: string;
+  /** 随会话一并删除的消息条数（便于核对级联删除）。 */
+  deletedMessages: number;
+}
+
 export interface LoginRequest {
   username?: string;
   password: string;

@@ -195,3 +195,32 @@ export function renameConversation(
   );
   return getConversationSummary(db, conversationId, ownerId);
 }
+
+export interface DeleteConversationResult {
+  deleted: boolean;
+  deletedMessages: number;
+}
+
+/**
+ * 删除会话（硬删除）。messages 通过外键 ON DELETE CASCADE 一并清除；
+ * 先统计消息条数用于日志与响应，整个过程在单个事务内完成。
+ */
+export function deleteConversation(
+  db: SqliteDatabase,
+  conversationId: string,
+  ownerId: string,
+): DeleteConversationResult {
+  const run = db.transaction((): DeleteConversationResult => {
+    const counted = db
+      .prepare('SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?')
+      .get(conversationId) as { count: number };
+    const result = db
+      .prepare('DELETE FROM conversations WHERE id = ? AND owner_id = ?')
+      .run(conversationId, ownerId);
+    return {
+      deleted: result.changes > 0,
+      deletedMessages: result.changes > 0 ? counted.count : 0,
+    };
+  });
+  return run();
+}

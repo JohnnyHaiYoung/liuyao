@@ -17,9 +17,9 @@
 | 模型 | DeepSeek 官方 Chat Completions 流式接口，模型名 `deepseek-flash`（可配置），`stream: true` + `stream_options.include_usage` |
 | 浏览器流 | `fetch()` + `POST` 读取 `text/event-stream`，服务端规范化事件 `start / delta / done / error` |
 | 登录 | 单拥有者账户，scrypt 强哈希 + 服务端会话 Cookie（HttpOnly、SameSite=Lax） |
-| 功能 | 自由聊天、流式显示、停止生成、历史会话列表、继续会话、标题手动重命名、完成/失败/中断状态持久化 |
-| 自检结果 | 本机黑盒验收自检（含服务端页面渲染与伪造来源头限流）：**通过 30 / 未通过 0**（假模型）；未配置密钥 22 通过 5 受阻、无效密钥 27 通过 2 受阻；适配层终止语义八态回归 8/8；历史列表分页 6/6。**均 0 未通过**。详见 [§13](#13-验收场景实测记录) |
-| 真实联调状态 | **已用真实 DeepSeek 密钥完成端到端验收：30 通过 / 0 未通过**（真实流式、真实用量、停止→interrupted、重启后历史仍在）。证据见 §13 场景 L。Linux 服务器与 HTTPS 反向代理下的复验仍未做 |
+| 功能 | 自由聊天、流式显示、停止生成、历史会话列表（含分页续载）、继续会话、标题手动重命名、**删除会话及其消息**、完成/失败/中断状态持久化 |
+| 自检结果 | 本机黑盒验收自检：**通过 37 / 未通过 0**（假模型，含页面渲染、伪造来源头限流、会话删除）；未配置密钥 22 通过 5 受阻、无效密钥 27 通过 2 受阻；适配层终止语义八态回归 8/8；历史列表分页 6/6。**均 0 未通过**。详见 [§13](#13-验收场景实测记录) |
+| 真实联调状态 | **已用真实 DeepSeek 密钥完成端到端验收：37 通过 / 0 未通过**（真实流式、真实用量、停止→interrupted、删除会话、重启后历史仍在）。证据见 §13 场景 L。Linux 服务器与 HTTPS 反向代理下的复验仍未做 |
 
 依赖锁定：`app/package-lock.json`（npm lockfileVersion 3），服务器用 `npm ci` 重建，**不要复制 Windows 的 `node_modules`**。
 
@@ -160,6 +160,7 @@ cd ../app && npm start
 | `GET /api/conversations/{id}` | 空 | `{conversation}` | 不含完整历史 |
 | `GET /api/conversations/{id}/messages?before=&limit=` | 查询参数 | `{items:[MessageDto], nextCursor, hasMore}` | 按插入顺序升序返回；`before` 为更早消息游标；`limit` 默认 50、上限 200 |
 | `PATCH /api/conversations/{id}` | `{title}` | `{conversation}` | 去首尾空白、折叠空白、上限 80 字符；写入 `title_source=manual` |
+| `DELETE /api/conversations/{id}` | 空 | `{deleted:true, id, deletedMessages}` | **硬删除**：会话与其全部消息一并清除（外键级联，单事务）；正在生成时返回 `409 generation_in_progress`；未登录 `401`、不存在或非本人 `404` |
 | `POST /api/conversations/{id}/messages` | `{clientMessageId, content, model?}` | `text/event-stream` | 先存用户消息再调模型；重复 `clientMessageId` → `409 duplicate_message`；同会话并发生成 → `409 generation_in_progress`；**只有收到 `[DONE]` 且结束原因可接受才记为 `completed`**，否则 `failed`（见 §6.4） |
 | `GET /api/healthz` | 空 | `{status,time,version,database,llm,auth,server}` | 不暴露密钥、路径或数据库内容；`auth.ownerConfigured` 表示**数据库里已存在可用的拥有者账户**，而不是“环境变量里写了值”（格式错误的哈希会被如实报为 `false`）；`server.trustProxy` 反映是否采信代理来源头 |
 
@@ -222,6 +223,16 @@ Content-Type: application/json
 
 ```json
 {"conversation":{"id":"0f6c...","title":"乾卦六爻解释","titleSource":"manual","createdAt":"…","updatedAt":"…","lastMessageAt":"…","messageCount":4,"lastMessageStatus":"completed","lastModel":"deepseek-flash"}}
+```
+
+删除会话（不可撤销；正在生成时先停止）：
+
+```http
+DELETE /api/conversations/0f6c...
+```
+
+```json
+{"deleted":true,"id":"0f6c...","deletedMessages":4}
 ```
 
 ### 5.2 错误码
@@ -314,7 +325,7 @@ data: {"code":"upstream_auth_error","message":"模型服务拒绝了本次调用
 
 ## 7. 页面行为
 
-- **左侧**：新建聊天按钮；按 `updated_at` 倒序的历史会话（标题、更新时间、`手动标题` 标记、`生成中/已中断/失败` 标记）；每条会话有「重命名」入口（回车保存、Esc 取消）；**底部有「加载更早的会话」按钮**，消费 `nextCursor` 续载第 31 条及更早的会话（验收报告 2026-10-02 第 3 条），刷新与续载按 id 合并去重；底部显示当前拥有者与退出。
+- **左侧**：新建聊天按钮；按 `updated_at` 倒序的历史会话（标题、更新时间、`手动标题` 标记、`生成中/已中断/失败` 标记）；每条会话有「重命名」与「删除」入口（重命名回车保存、Esc 取消；**删除需要二次确认**：先点「删除」变成「删除？确认/取消」，确认后不可撤销）；**底部有「加载更早的会话」按钮**，消费 `nextCursor` 续载第 31 条及更早的会话（验收报告 2026-10-02 第 3 条），刷新与续载按 id 合并去重；删除当前会话后自动切到列表中最新的一条，没有则回到空白草稿；正在生成的会话不允许删除（提示先停止）；底部显示当前拥有者与退出。
 - **主区标题**：当前会话标题旁同样提供「重命名」（就地编辑、回车保存、Esc 取消）。列表与主区改的是**同一个会话属性**，都走 `PATCH /api/conversations/{id}` 并置为 `manual`。
 - **主区**：消息列表区分用户/助手；助手消息显示所用模型、时间、状态徽标与输出 token 数；生成中显示逐字内容与光标；失败/中断显示可读原因。
 - **底部**：多行输入框（Enter 发送、Shift+Enter 换行、**中文输入法选词回车不误发**）、发送按钮、生成中变为「停止生成」；空白消息不可发送并显示字数。
@@ -365,7 +376,8 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | 3.2.5 | 失败/重启可辨认；重发不产生重复用户消息 | ✔ | 启动恢复 `recoverInterruptedMessages`；`client_message_id` 唯一约束 → `409 duplicate_message`；**提前 EOF 等异常一律记为 `failed`/`upstream_truncated`**（验收报告第 1 条，八态回归 8/8） |
 | 3.2.6 | 历史长期保存；上下文按可配置预算 | ✔ | `LIUYAO_CONTEXT_MESSAGE_LIMIT` / `LIUYAO_CONTEXT_CHAR_BUDGET`、`buildModelContext` |
 | 3.2 | 仅显示 DeepSeek Flash；历史保存当时模型名 | ✔ | `AVAILABLE_MODELS`、`messages.model` |
-| 4 | 全部接口契约（登录/登出/me/列表/建会话/详情/消息分页/重命名/发消息/healthz） | ✔ | `app/src/app/api/**`；自检覆盖鉴权、幂等、分页、重命名、错误码 |
+| 4 | 全部接口契约（登录/登出/me/列表/建会话/详情/消息分页/重命名/删除/发消息/healthz） | ✔ | `app/src/app/api/**`；自检覆盖鉴权、幂等、分页、重命名、删除、错误码 |
+| P1 | 产品需求 §2 的「删除单个会话」 | ✔（按用户要求提前实现） | `DELETE /api/conversations/{id}` + 侧栏二次确认；自检 7 项断言（401/404/生成中 409/级联清除/列表移除）。**导出与搜索仍属 P1 未做** |
 | 4.1 | SSE `start/delta/done/error`、保活、不缓存、UTF-8 分块安全 | ✔ | `app/src/server/http/sse.ts`、`app/src/lib/api-client.ts`；真实抓帧见 §6.2 |
 | 4.2 | 短事务先存消息→释放→调模型；增量定期落库；结束保存状态与用量 | ✔ | `app/src/server/chat/stream-service.ts` |
 | 4.2 | 重启后遗留 `streaming` 标为 `interrupted` | ✔ | `recoverInterruptedMessages`（启动日志会打印恢复条数） |
@@ -385,7 +397,8 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | Wiki 阅读、来源引用、`sources` 事件 | 属阶段 2；当前 Wiki 只有试点内容，页面明确说明未接入 | 阶段 2 |
 | 六爻排盘、盘面快照、`chart_runs` | 属阶段 3；提示词禁止编造卦盘，页面提示需补齐输入 | 阶段 3 |
 | `message_sources` / `chart_runs` / `model_usage` 表 | 按任务书 §5 的最小表集交付；无来源/排盘/多服务商时建空表无实际价值 | 阶段 2/3/4 随功能加迁移 |
-| P1：删除/导出会话、历史搜索、资料状态页 | 产品需求列为 P1，首版稳定后安排 | 后续阶段 |
+| P1：删除会话 | **已按用户要求提前实现**（`DELETE /api/conversations/{id}`，硬删除 + 外键级联，生成中拒绝删除） | 已在假模型与真实 DeepSeek 两种场景下验过 |
+| P1：导出会话、搜索历史标题与消息 | 未做 | 后续阶段 |
 | 「重新生成」上一轮失败回复 | 本阶段未提供；失败后用户消息已保存，重发会命中 `duplicate_message` 去重，界面提示改为继续追问 | 需要新增单独的重试接口 |
 | HTTPS/`Secure` Cookie、反向代理流式实测 | 本机为 HTTP；`Secure` 采用 `auto` 按请求协议判断。已给出 nginx 配置示例与要点，但**未在真实 nginx 后实测** | 提供服务器/代理环境 |
 | 浏览器端交互自动化测试 | 已通过服务端渲染检查与 HTTP 层完整链路验证，但**没有用真实浏览器**验证 React 水合、点击“发送/停止”、Markdown 渲染与移动端抽屉；客户端协议解析与事件处理逻辑有单元级保证（`createSseParser`）与同源 HTTP 实测 | 引入 Playwright 等浏览器自动化环境 |
@@ -438,6 +451,7 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | 终止语义从严 | `completed` 必须同时具备 `[DONE]` 与可接受的 `finish_reason`；缺一即 `failed` + `upstream_truncated` | 极少数代理会剥掉 `[DONE]`，此时完整回答会被标为失败；宁可保守也不把截断当完成（验收报告要求） |
 | 来源 IP 默认不可信 | 默认忽略 `X-Forwarded-For`/`X-Real-IP`，限流用单一来源桶；要按 IP 分桶必须显式 `LIUYAO_TRUST_PROXY=1` 且代理覆盖写头 | 默认模式下限流是全局计数：恶意者反复输错密码可以把拥有者短暂锁住（单用户私有部署可接受）；换取“无法用伪造头绕过限流” |
 | 会话列表分页 | 侧栏消费 `nextCursor` 并提供“加载更早的会话”，刷新与续载按 id 合并 | 需要维护游标与合并逻辑；换来第 31 条及更早的会话在网页可见 |
+| 删除会话 | **硬删除**（会话 + 消息，外键级联、单事务）而不是软删除/回收站；界面二次确认；生成中拒绝删除（409） | 删掉即不可恢复（靠 `storage/backups/` 的备份兜底）；换来“删除”语义直白、不残留私人记录 |
 
 ## 13. 验收场景实测记录
 
@@ -472,19 +486,19 @@ powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-l
 
 | 场景 | 通过 | 未通过 | 受阻 | 退出码 | 原始输出 |
 | --- | --- | --- | --- | --- | --- |
-| A 假模型完整验收（构建 + 重启 + 抓帧 + 伪造来源头限流） | **30** | **0** | 0 | 0 | [run-A-fake-model.txt](evidence/phase1/run-A-fake-model.txt) |
+| A 假模型完整验收（构建 + 重启 + 抓帧 + 伪造来源头限流 + 会话删除） | **37** | **0** | 0 | 0 | [run-A-fake-model.txt](evidence/phase1/run-A-fake-model.txt) |
 | B 未配置 API Key（确定性复现） | 22 | **0** | 5（均需密钥） | 0 | [run-B-no-api-key.txt](evidence/phase1/run-B-no-api-key.txt) |
 | C 无效 API Key（真实 401 处理） | 27 | **0** | 2（无法比较首段时序/无生成可停止） | 0 | [run-C-invalid-api-key.txt](evidence/phase1/run-C-invalid-api-key.txt) |
 | E 备份恢复演练 | – | – | – | 0 | [run-E-restore.txt](evidence/phase1/run-E-restore.txt) |
 | G 适配层终止语义八态回归（模拟上游） | **8** | **0** | 0 | 0 | [run-G-adapter-states.txt](evidence/phase1/run-G-adapter-states.txt) |
 | H 历史列表分页（55 条种子） | **6** | **0** | 0 | 0 | [run-H-paging.txt](evidence/phase1/run-H-paging.txt) |
-| L **真实 DeepSeek 端到端**（构建 + 重启 + 抓帧） | **30** | **0** | 0 | 0 | [run-L-live-deepseek.txt](evidence/phase1/run-L-live-deepseek.txt) |
+| L **真实 DeepSeek 端到端**（构建 + 重启 + 抓帧 + 会话删除） | **37** | **0** | 0 | 0 | [run-L-live-deepseek.txt](evidence/phase1/run-L-live-deepseek.txt) |
 
 > A/L 的抓帧步骤产出两份真实抓帧：[sse-sample.txt](evidence/phase1/sse-sample.txt)（模拟上游，211 帧）
-> 与 [sse-sample-live-deepseek.txt](evidence/phase1/sse-sample-live-deepseek.txt)（**真实 DeepSeek，135 帧**，
+> 与 [sse-sample-live-deepseek.txt](evidence/phase1/sse-sample-live-deepseek.txt)（**真实 DeepSeek**，
 > 帧内 `provider=deepseek`、`model=deepseek-flash`）。
-> 场景 L 的模型是真实的 `deepseek-flash`：首个 delta **1567ms**、`done` **2144ms**、用量 input=361/output=256，
-> 停止生成后为 `interrupted`，重启服务后历史仍在。
+> 场景 L 的模型是真实的 `deepseek-flash`：首个 delta **1830ms**、`done` **2883ms**、用量 input=361/output=433，
+> 停止生成后为 `interrupted`，生成中删除被拒（409），删除成功后级联清除该会话的 2 条消息。
 
 ### 13.3 任务书 §8 的验收场景逐条对照
 
@@ -616,6 +630,24 @@ powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-l
 关于“29 项通过”的适用范围（报告的提醒完全成立）：那些数字来自本地假模型，
 **不能**替代真实 DeepSeek 与服务器部署的验证。本次补充了场景 L（真实 DeepSeek，30/0）
 与场景 G/H（模拟上游、分页），未做的仍有 Linux 服务器与 HTTPS 反向代理下的部署复验。
+
+### 13.9 会话删除（产品需求 P1「删除单个会话」，按用户要求提前实现）
+
+新增 `DELETE /api/conversations/{id}`：硬删除会话与其全部消息（外键 `ON DELETE CASCADE`，
+单事务内先统计再删除），返回 `{deleted:true,id,deletedMessages}`。
+
+| 断言 | 结果 |
+| --- | --- |
+| 未登录删除被拒绝 | 通过：`401 auth_required` |
+| 删除不存在的会话 | 通过：`404 not_found` |
+| **正在生成时删除被拒绝** | 通过：`409 generation_in_progress`（否则流式任务会继续往已删除的会话写状态） |
+| 停止后删除成功并返回消息条数 | 通过：`200 deleted=true deletedMessages=2`（删除前确实 2 条） |
+| 消息被级联清除 | 通过：消息接口 `404` |
+| 会话元数据消失 | 通过：详情接口 `404` |
+| 不再出现在历史列表 | 通过：列表从 2 条降为 1 条 |
+
+假模型（场景 A）与真实 DeepSeek（场景 L）两种场景下均通过；界面上是「删除 → 删除？确认/取消」
+的二次确认，删除当前会话后自动切到列表中最新的一条。
 
 ## 14. 已知限制与后续建议
 

@@ -508,6 +508,100 @@ async function main() {
     record('WAL 模式已启用并产生 -wal 文件', wal ? 'pass' : 'info', wal ? '存在 liuyao.db-wal' : '当前无 -wal（可能已 checkpoint）');
   }
 
+  /* 11.5 删除会话（产品需求 P1「删除单个会话」提前实现） */
+  {
+    const authenticatedCookie = cookie;
+    cookie = '';
+    const anonDelete = await request('DELETE', `/api/conversations/${conversationId}`);
+    const anonBody = await readJson(anonDelete);
+    record(
+      '未登录不能删除会话',
+      anonDelete.status === 401 ? 'pass' : 'fail',
+      `HTTP ${anonDelete.status} code=${anonBody?.error?.code ?? '-'}`,
+    );
+    cookie = authenticatedCookie;
+
+    const missing = await request('DELETE', `/api/conversations/${randomUUID()}`);
+    const missingBody = await readJson(missing);
+    record(
+      '删除不存在的会话返回 404',
+      missing.status === 404 ? 'pass' : 'fail',
+      `HTTP ${missing.status} code=${missingBody?.error?.code ?? '-'}`,
+    );
+
+    // 造一个专供删除的会话。
+    const created = await readJson(
+      await request('POST', '/api/conversations', {
+        body: { clientConversationId: `verify-trash-${randomUUID()}` },
+      }),
+    );
+    const trashId = created.id;
+
+    // a) 生成过程中删除必须被拒绝（否则流式任务会继续往已删除的会话写状态）
+    const controller = new AbortController();
+    const sent = await request('POST', `/api/conversations/${trashId}/messages`, {
+      body: { clientMessageId: randomUUID(), content: '待删除会话里的消息。' },
+      headers: { accept: 'text/event-stream' },
+      signal: controller.signal,
+    });
+    if (sent.status === 200) {
+      const reader = sent.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let handled = false;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!handled && decoder.decode(value, { stream: true }).includes('event: delta')) {
+          handled = true;
+          const during = await request('DELETE', `/api/conversations/${trashId}`);
+          const duringBody = await readJson(during);
+          record(
+            '正在生成时删除被拒绝（409）',
+            during.status === 409 ? 'pass' : 'fail',
+            `HTTP ${during.status} code=${duringBody?.error?.code ?? '-'}`,
+          );
+          controller.abort();
+          break;
+        }
+      }
+      controller.abort();
+      // 等服务端把 interrupted 写定并解除并发登记
+      await sleep(1500);
+    } else {
+      record('正在生成时删除被拒绝（409）', 'blocked', `无法开始生成（HTTP ${sent.status}）`);
+    }
+
+    const beforeDelete = await readJson(
+      await request('GET', `/api/conversations/${trashId}/messages?limit=50`),
+    );
+    const deleted = await request('DELETE', `/api/conversations/${trashId}`);
+    const deletedBody = await readJson(deleted);
+    record(
+      '删除会话返回被删除的消息条数',
+      deleted.status === 200 && deletedBody?.deleted === true ? 'pass' : 'fail',
+      `HTTP ${deleted.status} deleted=${deletedBody?.deleted ?? '-'} 消息数=${deletedBody?.deletedMessages ?? '-'}（删除前 ${(beforeDelete.items ?? []).length} 条）`,
+    );
+
+    const messagesAfter = await request('GET', `/api/conversations/${trashId}/messages`);
+    record(
+      '删除后消息接口返回 404（消息已级联清除）',
+      messagesAfter.status === 404 ? 'pass' : 'fail',
+      `HTTP ${messagesAfter.status}`,
+    );
+    const detailAfter = await request('GET', `/api/conversations/${trashId}`);
+    record(
+      '删除后会话元数据返回 404',
+      detailAfter.status === 404 ? 'pass' : 'fail',
+      `HTTP ${detailAfter.status}`,
+    );
+    const listAfter = await readJson(await request('GET', '/api/conversations?limit=100'));
+    record(
+      '删除后不再出现在历史列表',
+      (listAfter.items ?? []).every((item) => item.id !== trashId) ? 'pass' : 'fail',
+      `列表当前 ${(listAfter.items ?? []).length} 条`,
+    );
+  }
+
   /* 12. 退出登录后不可访问 */
   {
     const logout = await request('POST', '/api/auth/logout');
