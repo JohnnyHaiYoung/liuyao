@@ -1,0 +1,38 @@
+# Large imported and generated corpus files. Release packaging must include them.
+/corpus/originals/*
+!/corpus/originals/README.md
+/corpus/extracted/*
+!/corpus/extracted/README.md
+/corpus/cleaned/*
+!/corpus/cleaned/README.md
+/corpus/assets/*
+!/corpus/assets/README.md
+/corpus/reports/*
+!/corpus/reports/README.md
+/corpus/manifest.jsonl
+/dist/
+
+# Local credentials and Python environments
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+
+# Node / Next.js application (dependencies are reinstalled from the lockfile)
+/app/node_modules/
+/app/.next/
+/app/out/
+/app/*.tsbuildinfo
+
+# Local scratch space used while probing the toolchain
+/.scratch-probe/
+/.npm-cache/
+
+# Runtime state: SQLite database, WAL files, backups and logs.
+# It must be preserved on the server (persistent volume / separate directory),
+# but it holds private chat records, so it is not committed.
+/storage/*
+!/storage/README.md
+/storage/**/server-*.log

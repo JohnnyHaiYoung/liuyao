@@ -1,0 +1,17 @@
+# 统一换行符：仓库内一律保存 LF（服务器部署在 Linux，避免 CRLF 混入）
+* text=auto eol=lf
+
+# Windows 专用脚本检出为 CRLF，便于记事本等编辑器查看
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制/生成的资源不做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.doc binary
+*.docx binary
+*.db binary
+*.xlsx binary

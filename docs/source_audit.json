@@ -1,0 +1,36 @@
+{
+  "source": "F:\\道教\\六爻",
+  "file_count": 139,
+  "total_bytes": 538895817,
+  "extensions": {
+    ".pdf": 46,
+    ".doc": 64,
+    ".txt": 25,
+    ".docx": 2,
+    ".rar": 1,
+    ".ppt": 1
+  },
+  "scope_candidates": {
+    "liuyao_title": 83,
+    "review_title": 29,
+    "adjacent_title": 25,
+    "mixed_title": 2
+  },
+  "format_probes": {
+    "pdf_text_sample": 8,
+    "pdf_no_text_in_sample": 38,
+    "legacy_ole_document": 63,
+    "txt_decodable_sample": 23,
+    "docx_readable": 2,
+    "txt_encoding_review": 2,
+    "rtf_document": 1,
+    "unknown_signature": 1,
+    "rar_archive": 1
+  },
+  "exact_duplicate_groups": [
+    [
+      "005.周惠新玄宗六爻卦例100例88页\\15周惠新玄宗六爻卦例100例88页.pdf",
+      "15周惠新玄宗六爻卦例100例88页.pdf"
+    ]
+  ]
+}
