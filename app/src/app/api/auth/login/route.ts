@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ERROR_CODES, type LoginRequest, type LoginResponse } from '@/shared/types';
 import { dummyVerify, verifyPassword } from '@/server/auth/password';
 import { isSecureRequest, setSessionCookie, startSession } from '@/server/auth/session';
-import { getConfig, isOwnerConfigured } from '@/server/config';
+import { getConfig } from '@/server/config';
 import { findOwnerByUsername, getDb } from '@/server/db';
 import { purgeStaleSessions } from '@/server/db/sessions';
 import { checkSameOrigin, clientIp, jsonError, jsonOk, readJsonBody } from '@/server/http/api';
@@ -35,17 +35,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!body.ok) return body.response;
   const password = typeof body.value.password === 'string' ? body.value.password : '';
 
-  if (!isOwnerConfigured()) {
-    // 未配置口令时也做一次哈希运算，避免用响应时间判断服务器是否已配置。
+  const db = getDb();
+  const owner = findOwnerByUsername(db, config.owner.username);
+  if (!owner) {
+    // 库里没有账户：可能是没配环境变量，也可能是哈希格式不可用（启动日志会说明原因）。
     dummyVerify(password);
-    console.warn('[liuyao] 登录失败：服务器未配置拥有者密码。');
+    console.warn('[liuyao] 登录失败：服务器尚未建立拥有者账户。');
     return jsonError(503, ERROR_CODES.authNotConfigured);
   }
 
-  const db = getDb();
-  const owner = findOwnerByUsername(db, config.owner.username);
-  const passwordOk = owner ? verifyPassword(password, owner.password_hash) : false;
-  if (!owner || !passwordOk) {
+  const passwordOk = verifyPassword(password, owner.password_hash);
+  if (!passwordOk) {
     dummyVerify(password);
     // 只记录失败事件与来源，不记录尝试的密码。
     console.warn(`[liuyao] 登录失败 ip=${ip}`);

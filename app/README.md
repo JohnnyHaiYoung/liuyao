@@ -43,7 +43,7 @@ npm start                    # 默认 http://127.0.0.1:3000
 | `npm run dev` | 开发模式 |
 | `npm run build` / `npm start` | 生产构建 / 单实例启动 |
 | `npm run typecheck` | TypeScript 类型检查 |
-| `npm run hash-password` | 生成拥有者口令哈希（`echo "密码" \| npm run hash-password`） |
+| `npm run hash-password` | 生成拥有者口令哈希（冒号格式，可直接写入 `.env.local`） |
 | `npm run db:backup` | 一致性备份到 `storage/backups/`，并做完整性检查 |
 | `npm run db:info` | 只读巡检：迁移版本、WAL、计数、状态分布 |
 | `npm run verify:phase1` | 黑盒验收自检（需服务已启动，密码放 `LIUYAO_VERIFY_PASSWORD`） |

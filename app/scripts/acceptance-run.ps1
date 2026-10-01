@@ -58,10 +58,19 @@ if (-not [string]::IsNullOrWhiteSpace($RestoreFrom)) {
 }
 
 $env:LIUYAO_STORAGE_DIR = $storage
-$env:LIUYAO_OWNER_PASSWORD = $Password
 $env:LIUYAO_VERIFY_PASSWORD = $Password
 $env:PORT = "$Port"
 $env:LIUYAO_BASE_URL = "http://127.0.0.1:$Port"
+
+# Bootstrap the owner from a hash produced by scripts/hash-password.mjs instead of a plaintext
+# password: this way every acceptance run also proves that the generator and the server-side
+# verifier agree (and that the colon format survives PowerShell / env handling).
+# Use an absolute path: this block runs before Set-Location, so a relative path would not resolve.
+$hashScript = Join-Path $appDir 'scripts\hash-password.mjs'
+$ownerHash = (& node $hashScript $Password 2>$null | Select-Object -First 1)
+if ([string]::IsNullOrWhiteSpace($ownerHash)) { throw "hash-password.mjs produced no hash ($hashScript)" }
+$env:LIUYAO_OWNER_PASSWORD_HASH = $ownerHash.Trim()
+Remove-Item Env:LIUYAO_OWNER_PASSWORD -ErrorAction SilentlyContinue
 
 if ($FakeMode) {
   $env:LIUYAO_FAKE_MODEL = '1'

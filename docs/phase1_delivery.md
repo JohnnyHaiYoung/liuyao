@@ -50,9 +50,15 @@ npm start                                                   # 默认 http://127.
 
 ### 2.2 首次登录
 
-1. 生成口令哈希：`echo "你的密码" | npm run hash-password`，把输出写入 `LIUYAO_OWNER_PASSWORD_HASH`。
+1. 生成口令哈希：`echo "你的密码" | npm run hash-password`（输出形如
+   `scrypt:32768:8:1:<saltBase64>:<hashBase64>`），把这一行写入 `app/.env.local` 的
+   `LIUYAO_OWNER_PASSWORD_HASH=`。**该格式不含 `$`**，可直接写进 `.env` 文件与 systemd `EnvironmentFile`；
+   若使用旧的 `$` 分隔格式，在 `.env` 文件里必须把每个 `$` 写成 `\$`（原因见 §3 与 §13.7）。
 2. 启动服务（首次启动会建库、跑迁移、按环境变量创建拥有者账户）。
 3. 打开 `/login` 输入密码；成功后进入 `/`（聊天界面）。
+
+> 想先确认服务起来了：`Invoke-RestMethod http://127.0.0.1:3000/api/healthz` 应返回
+> `auth.ownerConfigured = True`；若为 `False`，启动日志会打印哈希不可用的具体原因。
 
 ## 3. 环境变量与密钥处理
 
@@ -61,7 +67,7 @@ npm start                                                   # 默认 http://127.
 | 变量 | 必需 | 说明 |
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | 是（联调） | **只从服务器环境读取**；缺失时聊天接口返回 `503 llm_not_configured`，页面显示明确提示，不泄露任何密钥信息 |
-| `LIUYAO_OWNER_PASSWORD_HASH` | 二选一 | scrypt 哈希（推荐），启动时同步到数据库 |
+| `LIUYAO_OWNER_PASSWORD_HASH` | 二选一 | scrypt 哈希（推荐），格式 `scrypt:N:r:p:saltBase64:hashBase64`，启动时同步到数据库。**用冒号而不是 `$` 分隔**：Next 读 `.env` 文件时会对值做变量展开，`scrypt$32768$8$1$…` 会被吃掉成 `scrypt==…`，导致登录一直失败（旧 `$` 格式仍可校验，但在 `.env` 里必须写成 `\$`） |
 | `LIUYAO_OWNER_PASSWORD` | 二选一 | 明文仅用于首次引导，服务立即哈希入库；数据库与日志中不会出现明文 |
 | `LLM_BASE_URL` / `LLM_MODEL` | 否 | 默认 `https://api.deepseek.com` / `deepseek-flash` |
 | `LLM_REASONING_EFFORT` | 否 | `none`（关闭思考，首段最快）/ `low` / `high`（默认）/ `max` |
@@ -150,7 +156,7 @@ cd ../app && npm start
 | `GET /api/conversations/{id}/messages?before=&limit=` | 查询参数 | `{items:[MessageDto], nextCursor, hasMore}` | 按插入顺序升序返回；`before` 为更早消息游标；`limit` 默认 50、上限 200 |
 | `PATCH /api/conversations/{id}` | `{title}` | `{conversation}` | 去首尾空白、折叠空白、上限 80 字符；写入 `title_source=manual` |
 | `POST /api/conversations/{id}/messages` | `{clientMessageId, content, model?}` | `text/event-stream` | 先存用户消息再调模型；重复 `clientMessageId` → `409 duplicate_message`；同会话并发生成 → `409 generation_in_progress` |
-| `GET /api/healthz` | 空 | `{status,time,version,database,llm,auth}` | 不暴露密钥、路径或数据库内容 |
+| `GET /api/healthz` | 空 | `{status,time,version,database,llm,auth}` | 不暴露密钥、路径或数据库内容；`auth.ownerConfigured` 表示**数据库里已存在可用的拥有者账户**，而不是“环境变量里写了值”（格式错误的哈希会被如实报为 `false`） |
 
 ### 5.1 请求/响应示例
 
@@ -401,6 +407,7 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | 假模型 | 提供**仅验收使用**的本地假模型（默认关闭、模型名自证、页面告警） | 让无密钥环境也能验证 SSE/停止/持久化链路；绝不被当作 DeepSeek 联调证据 |
 | Windows 脚本编码 | `app/scripts/acceptance-run.ps1` 保持纯 ASCII | Windows PowerShell 会把无 BOM 的 UTF-8 `.ps1` 当 ANSI 读，中文注释会吞掉下一行（本次已实际踩到并修复） |
 | 安装期脚本 | `app/.npmrc` 设 `ignore-scripts=true`：依赖无需编译，better-sqlite3 自带预编译二进制 | 隐藏了未来依赖可能需要安装脚本的风险；新增依赖时必须复核其安装脚本（`.npmrc` 内已写明） |
+| 口令哈希分隔符 | 用冒号 `scrypt:N:r:p:salt:hash` 而不是 `$`：`$` 会被 Next 的 `.env` 变量展开和 PowerShell 双引号吞掉，造成“页面输入密码无效” | 旧 `$` 格式仍可校验；`.env` 用户需写 `\$`（已在 §13.7 留下实测记录） |
 
 ## 13. 验收场景实测记录
 
@@ -511,6 +518,40 @@ powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-b
 
 进入日志的上游错误摘要先经过脱敏函数（把 `sk-***`、`Bearer ***` 形式替换掉）并截断到 300 字符以内；
 本次上游自身也把密钥显示为 `****only`。请求头里的 `Authorization` 从不写入日志或数据库。
+
+### 13.7 口令哈希分隔符问题（实测复现与修复）
+
+现象：把 `npm run hash-password` 的输出直接写进 `.env.local` 后，启动日志报
+“LIUYAO_OWNER_PASSWORD_HASH 格式不可用”，页面输入正确密码也无法登录。
+
+复现（直接调用 Next 自己的 `loadEnvConfig` 读取 `.env.local`）：
+
+| 写法 | 读入结果 |
+| --- | --- |
+| `LIUYAO_OWNER_PASSWORD_HASH=scrypt$32768$8$1$salt$hash` | 130 字符 → **94 字符**，变成 `scrypt==<hash>`（`$32768`、`$8`、`$1`、`$salt` 被当作未定义变量展开掉了） |
+| 每个 `$` 写成 `\$`（`scrypt\$32768\$8\$1\$salt\$hash`） | 130 字符，与原值完全一致 |
+| PowerShell `"scrypt$32768$..."`（双引号） | 变成 `scrypt`（`$` 后内容被当作变量） |
+| PowerShell `'scrypt$32768$...'`（单引号） | 原值不变 |
+
+修复：
+
+1. `hash-password` 默认输出改为**冒号分隔** `scrypt:N:r:p:saltBase64:hashBase64`，该格式不含 `$`，
+   在 `.env` 文件、PowerShell、systemd `EnvironmentFile` 中都是字面值；
+2. 服务端 `parseEncodedHash()` 同时接受 `:` 与 `$` 两种分隔符（旧值不必重新生成）；
+3. 启动日志与 `hashProblemHint()` 会指出“分隔符数量不足 / `$` 被 .env 展开”，并给出两种解决方式；
+4. 验收脚本改为**用 `hash-password.mjs` 生成哈希**再引导账户，因此每次验收都会顺带验证
+   “生成器 ↔ 校验器一致”和冒号格式在 shell/环境变量中的可用性。
+
+修复后实测（全新测试库，真实登录流程）：
+
+| 写法 | `healthz.auth.ownerConfigured` | `POST /api/auth/login` |
+| --- | --- | --- |
+| `.env.local` 里放**未转义** `$` 格式（被展开破坏） | `false`（修正前会误报 `true`） | `503 auth_not_configured`，启动日志指出“分隔符数量为 1…`$` 被 Next 的变量展开吃掉” |
+| `.env.local` 里放**冒号**格式 | `true` | 正确口令 `200`，错误口令 `401` |
+| 旧 `$` 格式经**单引号 shell 变量**传入 | `true` | `200`（向后兼容） |
+
+顺带修正了一个语义问题：`healthz.auth.ownerConfigured` 与登录接口原先只看“环境变量是否存在”，
+哈希格式错误时会报 `true` 并让人误以为密码输错；现在两者都以**数据库中是否存在拥有者账户**为准。
 
 ## 14. 已知限制与后续建议
 

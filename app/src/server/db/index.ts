@@ -4,7 +4,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import type { Database as SqliteDatabase } from 'better-sqlite3';
 import { ensureStorageDirs, getConfig } from '../config';
-import { hashPassword, looksLikePasswordHash, verifyPassword } from '../auth/password';
+import { hashPassword, hashProblemHint, looksLikePasswordHash, verifyPassword } from '../auth/password';
 
 /**
  * SQLite 连接、版本化迁移与启动恢复。
@@ -130,9 +130,9 @@ function bootstrapOwner(db: SqliteDatabase): void {
 
   const envHash = owner.passwordHash && looksLikePasswordHash(owner.passwordHash) ? owner.passwordHash : null;
   if (owner.passwordHash && !envHash) {
-    // 不打印用户提供的值，只给出格式提示。
+    // 只输出格式层面的提示，不回显用户提供的值。
     console.error(
-      '[liuyao] LIUYAO_OWNER_PASSWORD_HASH 不是本项目的 scrypt 哈希格式，已忽略。请用 npm run hash-password 生成。',
+      `[liuyao] LIUYAO_OWNER_PASSWORD_HASH 格式不可用，已忽略：${hashProblemHint(owner.passwordHash)}`,
     );
   }
 
