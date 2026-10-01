@@ -47,6 +47,13 @@ export interface AppConfig {
     loginWindowMs: number;
     sendsPerMinute: number;
   };
+  http: {
+    /**
+     * 是否信任反向代理写入的来源头（X-Real-IP / X-Forwarded-For）。
+     * 默认 false：这些头可被客户端伪造，未开启时按单一来源限流。
+     */
+    trustProxy: boolean;
+  };
   appVersion: string;
 }
 
@@ -155,6 +162,9 @@ function buildConfig(): AppConfig {
       loginMaxAttempts: readInt('LIUYAO_LOGIN_MAX_ATTEMPTS', 10, 1, 1000),
       loginWindowMs: readFloat('LIUYAO_LOGIN_WINDOW_MINUTES', 15, 0.1, 1440) * 60 * 1000,
       sendsPerMinute: readInt('LIUYAO_SENDS_PER_MINUTE', 30, 1, 600),
+    },
+    http: {
+      trustProxy: ['1', 'true', 'yes'].includes((process.env.LIUYAO_TRUST_PROXY ?? '').trim().toLowerCase()),
     },
     appVersion: '0.1.0-phase1',
   };

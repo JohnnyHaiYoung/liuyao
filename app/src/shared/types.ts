@@ -140,6 +140,7 @@ export interface HealthzResponse {
   database: { ok: boolean; migrations: number };
   llm: { configured: boolean; provider: string; model: string; mode: 'live' | 'fake' };
   auth: { ownerConfigured: boolean };
+  server: { trustProxy: boolean };
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,6 +198,8 @@ export const ERROR_CODES = {
   upstreamTimeout: 'upstream_timeout',
   upstreamUnavailable: 'upstream_unavailable',
   upstreamError: 'upstream_error',
+  /** 上游响应没有正常结束（缺 [DONE] 或 finish_reason）：绝不谎报为 completed。 */
+  upstreamTruncated: 'upstream_truncated',
   outputLimitReached: 'output_limit_reached',
   contentFiltered: 'content_filtered',
   clientAborted: 'client_aborted',
@@ -225,6 +228,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   [ERROR_CODES.upstreamTimeout]: '模型服务响应超时。',
   [ERROR_CODES.upstreamUnavailable]: '模型服务暂时不可用。',
   [ERROR_CODES.upstreamError]: '模型调用失败。',
+  [ERROR_CODES.upstreamTruncated]: '模型响应没有正常结束，已保存收到的部分内容，请重试或继续追问。',
   [ERROR_CODES.outputLimitReached]: '回复达到长度上限，已保存已生成部分。',
   [ERROR_CODES.contentFiltered]: '内容被模型服务的安全策略拦截。',
   [ERROR_CODES.clientAborted]: '已由用户停止生成。',

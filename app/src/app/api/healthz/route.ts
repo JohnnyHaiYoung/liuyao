@@ -36,6 +36,7 @@ export async function GET(): Promise<Response> {
       mode: config.llm.fakeMode ? 'fake' : 'live',
     },
     auth: { ownerConfigured },
+    server: { trustProxy: config.http.trustProxy },
   };
   return jsonOk(body);
 }

@@ -30,9 +30,16 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+/** 桶数量上限：即使键被外部影响，也不会无限增长。 */
+const MAX_BUCKETS = 10000;
+
 export function consume(key: string, limit: number, windowMs: number): RateLimitResult {
   const store = buckets();
   const now = Date.now();
+  if (store.size >= MAX_BUCKETS) {
+    sweep();
+    if (store.size >= MAX_BUCKETS) evictOldest();
+  }
   const existing = store.get(key);
   if (!existing || existing.resetAt <= now) {
     store.set(key, { count: 1, resetAt: now + windowMs });
@@ -61,4 +68,18 @@ export function sweep(): void {
   for (const [key, bucket] of store) {
     if (bucket.resetAt <= now) store.delete(key);
   }
+}
+
+/** 仍然超限时淘汰最早过期的桶（极端情况下的兜底）。 */
+function evictOldest(): void {
+  const store = buckets();
+  let oldestKey: string | null = null;
+  let oldestReset = Number.POSITIVE_INFINITY;
+  for (const [key, bucket] of store) {
+    if (bucket.resetAt < oldestReset) {
+      oldestReset = bucket.resetAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey !== null) store.delete(oldestKey);
 }

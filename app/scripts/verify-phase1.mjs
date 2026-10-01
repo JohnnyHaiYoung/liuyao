@@ -137,7 +137,7 @@ async function main() {
       record(
         'healthz 存活检查',
         'pass',
-        `数据库迁移 ${body.database?.migrations} 个；模型 ${body.llm?.model}；已配置密钥=${llmConfigured}；已配置拥有者密码=${body.auth?.ownerConfigured}`,
+        `数据库迁移 ${body.database?.migrations} 个；模型 ${body.llm?.model}；已配置密钥=${llmConfigured}；已配置拥有者密码=${body.auth?.ownerConfigured}；信任代理头=${body.server?.trustProxy}`,
       );
       record('密钥未出现在响应中', JSON.stringify(body).includes('sk-') ? 'fail' : 'pass', '响应体不含 API Key 片段');
     } else {
@@ -516,6 +516,31 @@ async function main() {
       '退出登录后历史接口不可访问',
       logout.status === 200 && afterLogout.status === 401 ? 'pass' : 'fail',
       `logout HTTP ${logout.status}；退出后 /api/conversations HTTP ${afterLogout.status}`,
+    );
+  }
+
+  /* 13. 伪造来源头不能绕过登录限流（验收报告 2026-10-02 第 2 条）
+     注意：这一段会耗尽本进程的登录限流桶，所以必须放在最后。 */
+  {
+    const attempts = [];
+    const configured = Number.parseInt(process.env.LIUYAO_LOGIN_MAX_ATTEMPTS ?? '', 10);
+    const tries = (Number.isFinite(configured) ? configured : 10) + 2;
+    for (let index = 1; index <= tries; index += 1) {
+      const response = await fetch(absolute('/api/auth/login'), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': `203.0.113.${index}`,
+          'x-real-ip': `203.0.113.${index}`,
+        },
+        body: JSON.stringify({ password: `spoofed-attempt-${index}` }),
+      });
+      attempts.push(response.status);
+    }
+    record(
+      '伪造 X-Forwarded-For/X-Real-IP 无法绕过登录限流',
+      attempts.includes(429) ? 'pass' : 'fail',
+      `连续 ${attempts.length} 次错误密码（每次更换来源头）返回码：${attempts.join(',')}`,
     );
   }
 

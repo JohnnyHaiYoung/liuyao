@@ -24,8 +24,12 @@ app/
 # 在 app/ 目录
 npm ci                       # 按 package-lock.json 安装；app/.npmrc 设了 ignore-scripts（见下方说明）
 npm run build
-npm start                    # 默认 http://127.0.0.1:3000
+npm start -- -H 127.0.0.1    # 建议显式只监听回环：next start 默认是 0.0.0.0
 ```
+
+> **监听地址**：`next start` 的默认 hostname 是 `0.0.0.0`（`next start --help` 可核对）。
+> 本机自用建议加 `-H 127.0.0.1`；若放在反向代理后，也必须只监听回环，否则可以绕过代理直连应用。
+> 需要局域网直接访问时才显式 `-H 0.0.0.0`，并自行评估暴露面。
 
 > `app/.npmrc` 里设置 `ignore-scripts=true`：本项目依赖无需安装期编译。
 > better-sqlite3 包内有 `binding.gyp` 却没有自定义 install 脚本，npm 默认会调用 node-gyp 编译并在
@@ -47,6 +51,16 @@ npm start                    # 默认 http://127.0.0.1:3000
 | `npm run db:backup` | 一致性备份到 `storage/backups/`，并做完整性检查 |
 | `npm run db:info` | 只读巡检：迁移版本、WAL、计数、状态分布 |
 | `npm run verify:phase1` | 黑盒验收自检（需服务已启动，密码放 `LIUYAO_VERIFY_PASSWORD`） |
+
+回归与验收辅助脚本（详见 [交付说明](../docs/phase1_delivery.md) 第 13 节）：
+
+| 脚本 | 用途 |
+| --- | --- |
+| `scripts/mock-deepseek-upstream.mjs` | 可控模拟上游（正常/长度上限/提前 EOF/连接重置/5xx/401/慢速/空正文），仅测试用 |
+| `scripts/check-adapter-states.mjs` | 适配层终止语义回归：逐态断言事件序列与落库状态 |
+| `scripts/seed-conversations.mjs` | 播种 N 条会话，用于历史列表分页验收 |
+| `scripts/check-conversations-paging.mjs` | 分页验收：最早一条会话可列出/打开/重命名/继续 |
+| `scripts/acceptance-run.ps1` | 一键编排：默认验收 / `-AdapterCheck` / `-PagingCheck` / `-ApiKeyFromFile`（真实密钥联调） |
 
 ## 边界
 

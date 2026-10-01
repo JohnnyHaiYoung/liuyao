@@ -7,6 +7,13 @@
 #   4. 放宽 proxy_read_timeout，思考模式首段可能较慢
 #   5. 透传 Host 与 X-Forwarded-Proto，应用据此决定 Cookie 是否加 Secure
 #
+# 来源 IP 信任链（验收报告 2026-10-02 第 2 条）：
+#   - 应用默认**不信任** X-Forwarded-For / X-Real-IP（它们可被客户端伪造）。
+#   - 只有在应用只监听 127.0.0.1、且本代理**覆盖写入** X-Real-IP 的前提下，
+#     才在服务器上设置 LIUYAO_TRUST_PROXY=1，让登录限流按真实来源 IP 分桶。
+#   - 因此这里用 `$remote_addr` **覆盖**而不是 `$proxy_add_x_forwarded_for` 追加：
+#     追加会保留客户端自带的头，任何按“第一段”取 IP 的实现都会被绕过。
+#
 # 把证书路径、域名和 upstream 端口按实际环境替换后放入 conf.d/。
 
 upstream liuyao_app {
@@ -37,8 +44,9 @@ server {
         proxy_pass http://liuyao_app;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        # 覆盖写入来源地址（不要用 $proxy_add_x_forwarded_for，那会保留客户端伪造的值）
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
         proxy_buffering off;
@@ -56,7 +64,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
         proxy_read_timeout 120s;

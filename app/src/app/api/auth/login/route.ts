@@ -5,7 +5,7 @@ import { isSecureRequest, setSessionCookie, startSession } from '@/server/auth/s
 import { getConfig } from '@/server/config';
 import { findOwnerByUsername, getDb } from '@/server/db';
 import { purgeStaleSessions } from '@/server/db/sessions';
-import { checkSameOrigin, clientIp, jsonError, jsonOk, readJsonBody } from '@/server/http/api';
+import { checkSameOrigin, clientIdentity, jsonError, jsonOk, readJsonBody, warnIfForwardedIgnored } from '@/server/http/api';
 import { consume, reset } from '@/server/http/rate-limit';
 
 /**
@@ -21,8 +21,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (originError) return originError;
 
   const config = getConfig();
-  const ip = clientIp(request);
-  const limitKey = `login:${ip}`;
+  const identity = clientIdentity(request);
+  warnIfForwardedIgnored(identity);
+  const limitKey = `login:${identity.key}`;
   const limit = consume(limitKey, config.limits.loginMaxAttempts, config.limits.loginWindowMs);
   if (!limit.allowed) {
     return jsonError(429, ERROR_CODES.rateLimited, {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!passwordOk) {
     dummyVerify(password);
     // 只记录失败事件与来源，不记录尝试的密码。
-    console.warn(`[liuyao] 登录失败 ip=${ip}`);
+    console.warn(`[liuyao] 登录失败 source=${identity.key}`);
     return jsonError(401, ERROR_CODES.invalidCredentials);
   }
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const response = jsonOk(payload);
   setSessionCookie(response, request, session);
   console.info(
-    `[liuyao] 登录成功 user=${owner.username} secure=${isSecureRequest(request)} ip=${ip}`,
+    `[liuyao] 登录成功 user=${owner.username} secure=${isSecureRequest(request)} source=${identity.key}`,
   );
   return response;
 }

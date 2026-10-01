@@ -18,8 +18,8 @@
 | 浏览器流 | `fetch()` + `POST` 读取 `text/event-stream`，服务端规范化事件 `start / delta / done / error` |
 | 登录 | 单拥有者账户，scrypt 强哈希 + 服务端会话 Cookie（HttpOnly、SameSite=Lax） |
 | 功能 | 自由聊天、流式显示、停止生成、历史会话列表、继续会话、标题手动重命名、完成/失败/中断状态持久化 |
-| 自检结果 | 本机黑盒验收自检（含服务端页面渲染检查）：**通过 29 / 未通过 0**（验收用假模型，覆盖流式与停止）；无密钥与无效密钥场景分别为 21 通过 5 受阻、26 通过 2 受阻，**均 0 未通过**。详见 [§13](#13-验收场景实测记录) |
-| 真实联调状态 | **尚未用真实 DeepSeek Key 完成端到端联调**（环境无密钥）。无密钥/无效密钥两条路径已实测，见 §13 场景 B、C |
+| 自检结果 | 本机黑盒验收自检（含服务端页面渲染与伪造来源头限流）：**通过 30 / 未通过 0**（假模型）；未配置密钥 22 通过 5 受阻、无效密钥 27 通过 2 受阻；适配层终止语义八态回归 8/8；历史列表分页 6/6。**均 0 未通过**。详见 [§13](#13-验收场景实测记录) |
+| 真实联调状态 | **已用真实 DeepSeek 密钥完成端到端验收：30 通过 / 0 未通过**（真实流式、真实用量、停止→interrupted、重启后历史仍在）。证据见 §13 场景 L。Linux 服务器与 HTTPS 反向代理下的复验仍未做 |
 
 依赖锁定：`app/package-lock.json`（npm lockfileVersion 3），服务器用 `npm ci` 重建，**不要复制 Windows 的 `node_modules`**。
 
@@ -35,8 +35,12 @@ npm run build
 export LIUYAO_OWNER_PASSWORD_HASH='scrypt$32768$8$1$...'   # echo "你的密码" | npm run hash-password
 export DEEPSEEK_API_KEY='sk-...'
 export LIUYAO_STORAGE_DIR=/srv/liuyao/storage               # 可选；默认 <项目根>/storage
-npm start                                                   # 默认 http://127.0.0.1:3000
+npm start -- -H 127.0.0.1                                   # 关键：显式只监听回环
 ```
+
+> **监听地址**：`next start` 的 hostname 默认是 **`0.0.0.0`**（`next start --help` 可核对），
+> 不是 `127.0.0.1`。本机自用或放在反向代理后都必须显式 `-H 127.0.0.1`，
+> 否则访问者可以绕过代理直连应用端口（验收报告 2026-10-02 第 2 条）。
 
 > 若不想使用仓库内的 `.npmrc`，等价命令是 `npm ci --ignore-scripts`。
 > **不要**在装有 Visual Studio 的机器之外执行不带该设置的 `npm install`：
@@ -78,6 +82,7 @@ npm start                                                   # 默认 http://127.
 | `LIUYAO_MAX_MESSAGE_CHARS` | 否 | 单条消息上限，默认 8000 |
 | `LIUYAO_CONTEXT_MESSAGE_LIMIT` / `LIUYAO_CONTEXT_CHAR_BUDGET` | 否 | 单次请求上下文预算，默认 20 条 / 40000 字符 |
 | `LIUYAO_LOGIN_MAX_ATTEMPTS` / `LIUYAO_LOGIN_WINDOW_MINUTES` / `LIUYAO_SENDS_PER_MINUTE` | 否 | 进程内限流 |
+| `LIUYAO_TRUST_PROXY` | 否 | 是否信任代理写入的来源头（默认 `0`）。关闭时忽略 `X-Forwarded-For`/`X-Real-IP` 并按单一来源限流；仅在「应用只监听 127.0.0.1 + 代理覆盖写入 `X-Real-IP`」时设为 `1` |
 | `LIUYAO_FAKE_MODEL` | 否 | **仅验收用**：`1` 时启用本地假模型（不联网）。默认关闭，生产禁用 |
 | `LIUYAO_PROJECT_ROOT` / `LIUYAO_MIGRATIONS_DIR` | 否 | 部署时显式指定路径 |
 
@@ -150,13 +155,13 @@ cd ../app && npm start
 | `POST /api/auth/login` | `{password}` | `{owner:{id,username}, expiresAt}` + `Set-Cookie` | 错误一律 `401 invalid_credentials`；按 IP 限流（默认 10 次 / 15 分钟）；未配置口令时 `503 auth_not_configured` |
 | `POST /api/auth/logout` | 空 | `{loggedOut:true}` | 撤销服务端会话并清 Cookie；幂等 |
 | `GET /api/auth/me` | 空 | `{authenticated:true, owner}` | 未登录 `401 auth_required` |
-| `GET /api/conversations?cursor=&limit=` | 查询参数 | `{items:[ConversationSummary], nextCursor}` | 按 `updated_at` 倒序；**不返回空草稿**；`limit` 默认 20、上限 100 |
+| `GET /api/conversations?cursor=&limit=` | 查询参数 | `{items:[ConversationSummary], nextCursor}` | 按 `updated_at` 倒序；**不返回空草稿**；`limit` 默认 20、上限 100；**网页会消费 `nextCursor` 显示“加载更早的会话”**（验收报告 2026-10-02 第 3 条） |
 | `POST /api/conversations` | `{clientConversationId}` | `{id,title,titleSource,createdAt,updatedAt,created}` | 同一 `clientConversationId` 幂等（重试不重复建会话）；新建返回 `201` |
 | `GET /api/conversations/{id}` | 空 | `{conversation}` | 不含完整历史 |
 | `GET /api/conversations/{id}/messages?before=&limit=` | 查询参数 | `{items:[MessageDto], nextCursor, hasMore}` | 按插入顺序升序返回；`before` 为更早消息游标；`limit` 默认 50、上限 200 |
 | `PATCH /api/conversations/{id}` | `{title}` | `{conversation}` | 去首尾空白、折叠空白、上限 80 字符；写入 `title_source=manual` |
-| `POST /api/conversations/{id}/messages` | `{clientMessageId, content, model?}` | `text/event-stream` | 先存用户消息再调模型；重复 `clientMessageId` → `409 duplicate_message`；同会话并发生成 → `409 generation_in_progress` |
-| `GET /api/healthz` | 空 | `{status,time,version,database,llm,auth}` | 不暴露密钥、路径或数据库内容；`auth.ownerConfigured` 表示**数据库里已存在可用的拥有者账户**，而不是“环境变量里写了值”（格式错误的哈希会被如实报为 `false`） |
+| `POST /api/conversations/{id}/messages` | `{clientMessageId, content, model?}` | `text/event-stream` | 先存用户消息再调模型；重复 `clientMessageId` → `409 duplicate_message`；同会话并发生成 → `409 generation_in_progress`；**只有收到 `[DONE]` 且结束原因可接受才记为 `completed`**，否则 `failed`（见 §6.4） |
+| `GET /api/healthz` | 空 | `{status,time,version,database,llm,auth,server}` | 不暴露密钥、路径或数据库内容；`auth.ownerConfigured` 表示**数据库里已存在可用的拥有者账户**，而不是“环境变量里写了值”（格式错误的哈希会被如实报为 `false`）；`server.trustProxy` 反映是否采信代理来源头 |
 
 ### 5.1 请求/响应示例
 
@@ -231,6 +236,7 @@ Content-Type: application/json
 | 413 / 415 | `invalid_request` | 请求体过大 / 非 JSON |
 | 429 | `rate_limited` | 登录或发送频率超限（附 `retryAfterSeconds`） |
 | 500 | `internal_error` | 服务端异常（不返回内部细节） |
+| — （流内 `error` 事件） | `upstream_truncated` | 上游响应没有正常结束：缺 `data: [DONE]` 或缺 `finish_reason`。**绝不谎报 completed**，已收到的正文会保留 |
 | 503 | `llm_not_configured` / `auth_not_configured` | 未配置 API Key / 未配置拥有者口令 |
 
 流已开始后的错误不再使用 HTTP 状态码，改用 SSE `error` 事件（见 §6.3）。
@@ -254,6 +260,7 @@ Content-Type: application/json
 ### 6.2 真实抓取示例（验收环境，假模型）
 
 完整文件：[docs/evidence/phase1/sse-sample.txt](evidence/phase1/sse-sample.txt)（211 帧：`start → delta ×208 → comment(保活) → done`）。
+真实 DeepSeek 的抓帧见 [sse-sample-live-deepseek.txt](evidence/phase1/sse-sample-live-deepseek.txt)（135 帧，`provider=deepseek`）。
 
 ```text
 event: start
@@ -286,9 +293,28 @@ data: {"code":"upstream_auth_error","message":"模型服务拒绝了本次调用
 
 同时数据库里该助手消息保存为 `status=failed`、`error_code=upstream_auth_error`，已收到的部分内容（此处为空）保留。
 
+### 6.4 终止语义（验收报告 2026-10-02 第 1 条）
+
+助手消息只有在**同时**满足下面两条时才会写入 `completed`：
+
+1. 收到上游的终止标记 `data: [DONE]`；
+2. 结束原因 `finish_reason` 属于可接受集合。
+
+| 上游实际行为 | `finish_reason` | 事件 | 落库状态 / errorCode |
+| --- | --- | --- | --- |
+| 正常结束 | `stop`（或 `tool_calls`） | `done` | `completed` |
+| 达到 max_tokens | `length` | `done` | `completed` + `output_limit_reached`（内容确实生成完，但被截断，页面标注） |
+| **提前 EOF（无 `[DONE]` 或缺 `finish_reason`）** | `null` | `error` | **`failed` + `upstream_truncated`**，保留已收到正文 |
+| 连接被重置 / 网络中断 | — | `error` | `failed` + `upstream_error`，保留已收到正文 |
+| 上游 4xx/5xx | — | `error` | `failed` + `upstream_auth_error` / `upstream_rate_limited` / `upstream_unavailable` … |
+| 内容被安全策略拦截 | `content_filter` | `error` | `failed` + `content_filtered` |
+| 用户点击停止 / 连接断开 | — | `done`（仍在连接时） | `interrupted` + `client_aborted` |
+
+收到 `[DONE]` 后适配层会立即停止读取并释放上游连接，不再等待 EOF。
+
 ## 7. 页面行为
 
-- **左侧**：新建聊天按钮；按 `updated_at` 倒序的历史会话（标题、更新时间、`手动标题` 标记、`生成中/已中断/失败` 标记）；每条会话有「重命名」入口（回车保存、Esc 取消）；底部显示当前拥有者与退出。
+- **左侧**：新建聊天按钮；按 `updated_at` 倒序的历史会话（标题、更新时间、`手动标题` 标记、`生成中/已中断/失败` 标记）；每条会话有「重命名」入口（回车保存、Esc 取消）；**底部有「加载更早的会话」按钮**，消费 `nextCursor` 续载第 31 条及更早的会话（验收报告 2026-10-02 第 3 条），刷新与续载按 id 合并去重；底部显示当前拥有者与退出。
 - **主区标题**：当前会话标题旁同样提供「重命名」（就地编辑、回车保存、Esc 取消）。列表与主区改的是**同一个会话属性**，都走 `PATCH /api/conversations/{id}` 并置为 `manual`。
 - **主区**：消息列表区分用户/助手；助手消息显示所用模型、时间、状态徽标与输出 token 数；生成中显示逐字内容与光标；失败/中断显示可读原因。
 - **底部**：多行输入框（Enter 发送、Shift+Enter 换行、**中文输入法选词回车不误发**）、发送按钮、生成中变为「停止生成」；空白消息不可发送并显示字数。
@@ -334,9 +360,9 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | 3.1 | 助手内容安全渲染 Markdown，不执行 HTML/脚本/任意链接 | ✔ | `app/src/components/MarkdownContent.tsx` |
 | 3.2.1 | 新建先进空白草稿，首条消息才建会话 | ✔ | 草稿 `clientConversationId`；自检“同一草稿 ID 不重复建会话”“空草稿不出现在列表” |
 | 3.2.2 | 首条消息生成简短默认标题（不调 LLM）；手动标题不被覆盖 | ✔ | `app/src/server/chat/title.ts`；自检“手动标题不被后续消息覆盖” |
-| 3.2.3 | 列表按 `updated_at` 倒序；重开会话可继续 | ✔ | `listConversations` + `refreshAfterGeneration` |
+| 3.2.3 | 列表按 `updated_at` 倒序；重开会话可继续 | ✔ | `listConversations` + `refreshAfterGeneration`；侧栏消费 `nextCursor` 支持**加载更早的会话**（验收报告第 3 条），55 条种子实测 6/6 通过 |
 | 3.2.4 | 同会话仅一个进行中请求；停止标 `interrupted` 并保留部分内容 | ✔ | `app/src/server/chat/in-flight.ts`、`stream-service.ts`；自检“停止生成后状态=interrupted、无永久 streaming” |
-| 3.2.5 | 失败/重启可辨认；重发不产生重复用户消息 | ✔ | 启动恢复 `recoverInterruptedMessages`；`client_message_id` 唯一约束 → `409 duplicate_message` |
+| 3.2.5 | 失败/重启可辨认；重发不产生重复用户消息 | ✔ | 启动恢复 `recoverInterruptedMessages`；`client_message_id` 唯一约束 → `409 duplicate_message`；**提前 EOF 等异常一律记为 `failed`/`upstream_truncated`**（验收报告第 1 条，八态回归 8/8） |
 | 3.2.6 | 历史长期保存；上下文按可配置预算 | ✔ | `LIUYAO_CONTEXT_MESSAGE_LIMIT` / `LIUYAO_CONTEXT_CHAR_BUDGET`、`buildModelContext` |
 | 3.2 | 仅显示 DeepSeek Flash；历史保存当时模型名 | ✔ | `AVAILABLE_MODELS`、`messages.model` |
 | 4 | 全部接口契约（登录/登出/me/列表/建会话/详情/消息分页/重命名/发消息/healthz） | ✔ | `app/src/app/api/**`；自检覆盖鉴权、幂等、分页、重命名、错误码 |
@@ -354,7 +380,7 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 
 | 项目 | 状态与原因 | 解除条件 |
 | --- | --- | --- |
-| **真实 DeepSeek 端到端联调** | 本机无 `DEEPSEEK_API_KEY`。已实测：无密钥→`503 llm_not_configured`（不产生半条会话）；无效密钥→上游 `401` 被归类为 `upstream_auth_error`，助手消息存为 `failed`，无永久 `streaming` | 配置真实 Key 后重跑 `npm run verify:phase1`，预期“首段内容早于生成结束到达”等项由“受阻”转为“通过” |
+| **真实 DeepSeek 端到端联调** | **已完成**：应用户在 `app/.env.local` 配置真实密钥，跑通真实流式、用量、停止→interrupted、重启后历史仍在（30 通过 / 0 未通过，见 §13 场景 L） | 已在服务器环境复验后即可关闭该项 |
 | 千问 `qwen3.7-plus` 选择入口 | 属阶段 4；本阶段只显示 DeepSeek Flash | 阶段 4 |
 | Wiki 阅读、来源引用、`sources` 事件 | 属阶段 2；当前 Wiki 只有试点内容，页面明确说明未接入 | 阶段 2 |
 | 六爻排盘、盘面快照、`chart_runs` | 属阶段 3；提示词禁止编造卦盘，页面提示需补齐输入 | 阶段 3 |
@@ -383,8 +409,9 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
    `created`（幂等命中时为 `false`）。语义未变，字段只增不减，已在 §5 记录最终形态。
 6. **产品需求 §2 的“六次爻值输入区”“展开依据”**：标为 P0 但依赖排盘与 Wiki（阶段 2/3）。本阶段不提供，
    且在系统提示词与页面提示中如实说明能力边界，**未修改产品需求文档**。
-7. **“聊天输入框可以重命名”**：按任务书 §1 与产品需求 §5 的暂定解释，实现为**会话标题可重命名**；
-   如用户澄清为输入框提示语可编辑，只需改界面文案，不影响存储结构。
+7. **“聊天输入框可以重命名”**：用户已确认指的是**当前聊天与历史列表的会话标题**，实现按此执行
+   （历史列表与主区标题都能改名，见 §7）。产品需求文档 §5 保留了早期“暂按…落地”的措辞，
+   是否改写由产品/架构方决定；实现不会去改输入框提示语。
 8. **模型名**：已核对官方文档，`deepseek-flash` 是当前有效模型名（DeepSeek-V4.1-Flash，1M 上下文，默认思考模式），
    与任务书一致；模型名可通过 `LLM_MODEL` 覆盖而无需改代码。
 
@@ -408,6 +435,9 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 | Windows 脚本编码 | `app/scripts/acceptance-run.ps1` 保持纯 ASCII | Windows PowerShell 会把无 BOM 的 UTF-8 `.ps1` 当 ANSI 读，中文注释会吞掉下一行（本次已实际踩到并修复） |
 | 安装期脚本 | `app/.npmrc` 设 `ignore-scripts=true`：依赖无需编译，better-sqlite3 自带预编译二进制 | 隐藏了未来依赖可能需要安装脚本的风险；新增依赖时必须复核其安装脚本（`.npmrc` 内已写明） |
 | 口令哈希分隔符 | 用冒号 `scrypt:N:r:p:salt:hash` 而不是 `$`：`$` 会被 Next 的 `.env` 变量展开和 PowerShell 双引号吞掉，造成“页面输入密码无效” | 旧 `$` 格式仍可校验；`.env` 用户需写 `\$`（已在 §13.7 留下实测记录） |
+| 终止语义从严 | `completed` 必须同时具备 `[DONE]` 与可接受的 `finish_reason`；缺一即 `failed` + `upstream_truncated` | 极少数代理会剥掉 `[DONE]`，此时完整回答会被标为失败；宁可保守也不把截断当完成（验收报告要求） |
+| 来源 IP 默认不可信 | 默认忽略 `X-Forwarded-For`/`X-Real-IP`，限流用单一来源桶；要按 IP 分桶必须显式 `LIUYAO_TRUST_PROXY=1` 且代理覆盖写头 | 默认模式下限流是全局计数：恶意者反复输错密码可以把拥有者短暂锁住（单用户私有部署可接受）；换取“无法用伪造头绕过限流” |
+| 会话列表分页 | 侧栏消费 `nextCursor` 并提供“加载更早的会话”，刷新与续载按 id 合并 | 需要维护游标与合并逻辑；换来第 31 条及更早的会话在网页可见 |
 
 ## 13. 验收场景实测记录
 
@@ -416,42 +446,54 @@ SSE 通道、停止生成与持久化，**不代表 DeepSeek 联调通过**。�
 - 机器：Windows（Laptop-28UKBFPT），Node **v22.20.0**，端口 **3100**，数据库位置 `storage/verify-*/liuyao.db`。
 - 构建：`node node_modules/next/dist/bin/next build` → 成功，全部业务路由为动态渲染。
 - 类型检查：`npx tsc --noEmit` → 无输出（通过）。
-- 三种配置分别启动真实服务并运行黑盒自检（`app/scripts/verify-phase1.mjs`）：
+- 各场景启动真实服务并运行对应检查（均由 `app/scripts/acceptance-run.ps1` 编排）：
 
 ```powershell
-# A. 本地验收用假模型（覆盖流式、停止、持久化、重启恢复）
-powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-fake -FakeMode -Rebuild -RestartCheck
-# B. 未配置 API Key
+# A. 本地假模型完整验收（流式、停止、持久化、重启恢复、SSE 抓帧、伪造来源头限流）
+powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-fake -FakeMode -Rebuild -RestartCheck -CaptureSse
+# B. 未配置 API Key（用单个空格显式遮蔽 app/.env.local，确定性复现 503）
 powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-nokey
 # C. 无效 API Key（真实访问 api.deepseek.com，验证失败处理；不代表调用成功）
 powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-badkey -ApiKey sk-invalid-for-verification-only
+# G. 适配层终止语义八态回归（可控模拟上游）
+powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-adapter -AdapterCheck
+# H. 历史列表分页（播种 55 条会话）
+powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-paging -PagingCheck -SeedConversations 55
+# L. 真实 DeepSeek 端到端（密钥来自 app/.env.local，脚本不读取也不打印它）
+powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-live -ApiKeyFromFile -Rebuild -RestartCheck -CaptureSse
 ```
 
 > 验收脚本使用的拥有者口令是**本机一次性口令**（`acceptance-run.ps1` 的 `-Password` 默认值，
 > 仅写入验收用的独立存储目录），与生产环境口令无关；生产口令只存在于服务器环境变量中。
 > 无效 Key 用 `-ApiKey` 显式传入，只出现在本次进程环境里，不写文件、不入库。
+> 场景 L 的密钥一直留在 `app/.env.local`（已被 `.gitignore` 忽略），脚本、日志与证据文件都不含密钥明文。
 
 ### 13.2 结果汇总
 
 | 场景 | 通过 | 未通过 | 受阻 | 退出码 | 原始输出 |
 | --- | --- | --- | --- | --- | --- |
-| A 假模型 + 构建 + 重启复核 + SSE 抓帧 | **29** | **0** | 0 | 0 | [run-A-fake-model.txt](evidence/phase1/run-A-fake-model.txt) |
-| B 未配置 API Key | 21 | **0** | 5（均需密钥） | 0 | [run-B-no-api-key.txt](evidence/phase1/run-B-no-api-key.txt) |
-| C 无效 API Key | 26 | **0** | 2（无法比较首段时序/无生成可停止） | 0 | [run-C-invalid-api-key.txt](evidence/phase1/run-C-invalid-api-key.txt) |
+| A 假模型完整验收（构建 + 重启 + 抓帧 + 伪造来源头限流） | **30** | **0** | 0 | 0 | [run-A-fake-model.txt](evidence/phase1/run-A-fake-model.txt) |
+| B 未配置 API Key（确定性复现） | 22 | **0** | 5（均需密钥） | 0 | [run-B-no-api-key.txt](evidence/phase1/run-B-no-api-key.txt) |
+| C 无效 API Key（真实 401 处理） | 27 | **0** | 2（无法比较首段时序/无生成可停止） | 0 | [run-C-invalid-api-key.txt](evidence/phase1/run-C-invalid-api-key.txt) |
 | E 备份恢复演练 | – | – | – | 0 | [run-E-restore.txt](evidence/phase1/run-E-restore.txt) |
-| F 冻结修订复验（不重新构建，其余同 A） | **29** | **0** | 0 | 0 | [run-F-final-state.txt](evidence/phase1/run-F-final-state.txt) |
+| G 适配层终止语义八态回归（模拟上游） | **8** | **0** | 0 | 0 | [run-G-adapter-states.txt](evidence/phase1/run-G-adapter-states.txt) |
+| H 历史列表分页（55 条种子） | **6** | **0** | 0 | 0 | [run-H-paging.txt](evidence/phase1/run-H-paging.txt) |
+| L **真实 DeepSeek 端到端**（构建 + 重启 + 抓帧） | **30** | **0** | 0 | 0 | [run-L-live-deepseek.txt](evidence/phase1/run-L-live-deepseek.txt) |
 
-> 场景 A/F 的抓帧步骤产出 [sse-sample.txt](evidence/phase1/sse-sample.txt)（真实 211 帧）。
-> B/C 的通过数多于早先版本，是因为脚本后来加入了 3 项服务端页面渲染检查（对未配置密钥的场景同样适用）。
+> A/L 的抓帧步骤产出两份真实抓帧：[sse-sample.txt](evidence/phase1/sse-sample.txt)（模拟上游，211 帧）
+> 与 [sse-sample-live-deepseek.txt](evidence/phase1/sse-sample-live-deepseek.txt)（**真实 DeepSeek，135 帧**，
+> 帧内 `provider=deepseek`、`model=deepseek-flash`）。
+> 场景 L 的模型是真实的 `deepseek-flash`：首个 delta **1567ms**、`done` **2144ms**、用量 input=361/output=256，
+> 停止生成后为 `interrupted`，重启服务后历史仍在。
 
 ### 13.3 任务书 §8 的验收场景逐条对照
 
-| 场景 | 实测结果（场景 A，假模型；括号内为真实 DeepSeek 待验证部分） |
+| 场景 | 实测结果（除注明外为场景 A 假模型；场景 L 为真实 DeepSeek） |
 | --- | --- |
 | 登录 | 通过：正确口令 `200` + `Set-Cookie`（HttpOnly、SameSite=Lax）；错误口令统一 `401 invalid_credentials` |
-| 页面渲染 | 通过（服务端渲染层面）：登录后 `/` 返回 200 且含新建按钮、输入框与标题；未登录 `/` 返回 `307 → /login`；`/login` 含密码输入框。**浏览器端交互（React 水合、点击发送/停止、Markdown 渲染）未做自动化测试**，见 §10 |
+| 页面渲染 | 通过（服务端渲染层面）：登录后 `/` 返回 200 且含新建按钮、输入框与标题；未登录 `/` 返回 `307 → /login`；`/login` 含密码输入框。**浏览器端交互（React 水合、点击发送/停止/Markdown 渲染/列表加载更多）未做自动化测试**，见 §10 |
 | 新建会话 | 通过：`201`，返回会话 ID；同一草稿 ID 再次调用返回同一条（`created=false`） |
-| 流式问答 | 通过：`start → delta ×208 → done`（210 帧，另有保活注释）；**首个 delta 133ms、`done` 25854ms**，证明首段内容早于全部完成到达浏览器（真实模型下同样由服务端边收边推） |
+| 流式问答 | 通过：假模型 `start → delta ×208 → done`（210 帧）；**真实 DeepSeek（场景 L）`start → delta → done`，首个 delta 1567ms、`done` 2144ms，用量 input=361/output=256**，两端都证明首段内容早于全部完成到达浏览器 |
 | 停止一次生成 | 通过：点停止后助手消息 `interrupted`、保留已收到内容（本次 1 字符）、无永久 `streaming` |
 | 再次发送并完成 | 通过：同会话继续追问，消息保存为 `completed`，会话 `updated_at` 前移 |
 | 重命名会话 | 通过：`PATCH` 返回 `titleSource=manual`；再发消息后标题**未被自动覆盖** |
@@ -553,10 +595,33 @@ powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-b
 顺带修正了一个语义问题：`healthz.auth.ownerConfigured` 与登录接口原先只看“环境变量是否存在”，
 哈希格式错误时会报 `true` 并让人误以为密码输错；现在两者都以**数据库中是否存在拥有者账户**为准。
 
+### 13.8 独立验收报告（2026-10-02）四项问题的复现与修复
+
+报告见 [第一阶段验收记录](phase1_acceptance_2026-10-02.md)。四项我都先复现、再修、再回归：
+
+| # | 报告结论 | 我的复现 | 修复 | 回归证据 |
+| --- | --- | --- | --- | --- |
+| 1 | [阻断] 上游提前结束被当作完成 | 模拟上游「正文后干净 EOF、无 `[DONE]`、无 `finish_reason`」→ 修复前事件 `start→delta×5→done`、库内 `completed`、errorCode 空（与正常结束完全一样） | `completed` 必须同时收到 `[DONE]` 与可接受 `finish_reason`；新增 `upstream_truncated`；修正 `data: [DONE]` 后仍继续读流的作用域缺陷 | 场景 G：8/8；同一用例现在为 `start→delta×5→error`、`failed/upstream_truncated`、正文 12 字保留 |
+| 2 | [上线阻断] 监听地址与来源 IP 信任链 | `next start --help` 确认默认 `0.0.0.0`；每次更换伪造 `X-Forwarded-For` 连试 12 次错误密码 → 返回码 `401×12`，**一次 429 都没有** | 文档与示例改为显式 `-H 127.0.0.1`；nginx 改为**覆盖**写入来源头；应用默认不信任转发头，需显式 `LIUYAO_TRUST_PROXY=1` 才按 IP 分桶（并校验 IP 字面量、限制桶数量） | 场景 A 新增断言“伪造 X-Forwarded-For/X-Real-IP 无法绕过登录限流”→ 出现 429，通过；`healthz.server.trustProxy=false` |
+| 3 | [功能缺口] 超过 50 条的旧会话在网页不可见 | 代码确认 `ChatApp` 固定 `listConversations(50)` 且丢弃 `nextCursor` | 侧栏消费 `nextCursor`（“加载更早的会话”），刷新与续载按 id 合并去重；新增种子与分页验收脚本 | 场景 H：55 条种子，3 页，最早一条在第 3 页；可打开（2 条消息）、可改名（`titleSource=manual`）、可继续（2→4 条） |
+| 4 | [文档] 标题需求仍写成“暂定解释” | 确认 §11 第 7 条措辞 | 改为“用户已确认指当前聊天与历史列表的会话标题”；产品需求文档的措辞是否更新留给产品/架构方 | 见 §11 第 7 条与 §7 |
+
+顺带修掉的两处相关问题：
+
+- 同源检查原先无条件采信 `X-Forwarded-Host`，客户端可伪造它与伪造的 `Origin` 配对，
+  从而绕过跨站保护；现在只在开启 `LIUYAO_TRUST_PROXY` 时才采信该头。
+- JSON 响应未声明 `charset=utf-8`，部分命令行客户端（PowerShell 5.1）会把中文按 latin-1 解码成乱码；
+  现在显式声明 `application/json; charset=utf-8`。
+
+关于“29 项通过”的适用范围（报告的提醒完全成立）：那些数字来自本地假模型，
+**不能**替代真实 DeepSeek 与服务器部署的验证。本次补充了场景 L（真实 DeepSeek，30/0）
+与场景 G/H（模拟上游、分页），未做的仍有 Linux 服务器与 HTTPS 反向代理下的部署复验。
+
 ## 14. 已知限制与后续建议
 
-1. **必须在配置真实 `DEEPSEEK_API_KEY` 后重跑** `npm run verify:phase1`，把 §13 中标注“受阻”的项转为通过，
-   并确认思考模式下的首段延迟、真实用量字段与 `finish_reason` 映射。
+1. **真实 DeepSeek 联调已完成**（场景 L）。接下来需要在**实际部署路径**复验：Linux 服务器安装、
+   `-H 127.0.0.1` 生效、直连应用端口不可达、反向代理下首段仍在生成结束前到达、
+   以及 `LIUYAO_TRUST_PROXY=1` 时按真实来源 IP 分桶（并确认代理确实覆盖写入 `X-Real-IP`）。
 2. 建议部署时用 systemd（单实例）并把 `storage/` 挂到持久化目录；**多副本会破坏会话/限流语义**。
 3. 反向代理上线后，用页面观察“首段是否在生成结束前出现”，并确认 `X-Accel-Buffering: no` 与 `proxy_buffering off` 生效。
 4. 「重新生成」尚未提供；若需要，建议新增 `POST /api/conversations/{id}/messages/{assistantMessageId}/regenerate`
@@ -564,3 +629,5 @@ powershell -File app/scripts/acceptance-run.ps1 -Storage <root>\storage\verify-b
 5. 历史管理（删除/导出/搜索）为 P1；删除需级联清理并保留备份策略。
 6. 阶段 2 接入 Wiki 时，请把“已选页面 + 来源 ID + 定位”随消息快照保存，并新增 `sources` 事件；
    本阶段的 `startChatStream` 已预留上下文构造位置。
+7. 浏览器端交互（React 水合、点击发送/停止、Markdown 渲染、侧栏“加载更早的会话”按钮）
+   仍缺自动化测试；本轮把接口层与落库状态都验到了，界面那一下点击需要人工确认一次。

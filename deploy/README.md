@@ -21,11 +21,18 @@ npm run build
 # 3) 把运行时数据放在持久化目录，并在升级应用时保留
 export LIUYAO_STORAGE_DIR=/srv/liuyao/storage
 export LIUYAO_PROJECT_ROOT=/srv/liuyao
-export LIUYAO_OWNER_PASSWORD_HASH='scrypt$32768$8$1$...'   # 见 app/README.md 的 hash-password
+export LIUYAO_OWNER_PASSWORD_HASH='scrypt:32768:8:1:...'       # 见 app/README.md 的 hash-password
 export DEEPSEEK_API_KEY='...'                              # 只放服务器环境，不入包
-npm start                                                  # 默认 127.0.0.1:3000
+npm start -- -H 127.0.0.1                                  # 关键：显式只监听回环
 ```
 
+- **监听地址必须显式绑定 `127.0.0.1`**：`next start` 的默认 hostname 是 `0.0.0.0`（可用
+  `next start --help` 核对），若服务器放行应用端口，访问者可以绕过 HTTPS 代理直连应用。
+  用 systemd 时写 `ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000`。
+- **来源 IP 信任链**：应用默认不信任 `X-Forwarded-For`/`X-Real-IP`（可被客户端伪造），
+  限流按单一来源计数。只有在应用只监听回环、且代理**覆盖写入** `X-Real-IP` 之后，
+  才设置 `LIUYAO_TRUST_PROXY=1` 让限流按真实 IP 分桶；`HEALTHZ` 的 `server.trustProxy`
+  与启动日志会显示当前是否启用。
 - 反向代理示例见 [nginx.liuyao.conf.example](nginx.liuyao.conf.example)：必须关闭该聊天接口的响应缓冲与压缩，
   并透传 `X-Forwarded-Proto`（应用据此决定登录 Cookie 是否带 `Secure`）。
 - `storage/` 保存数据库、备份与日志；`npm run db:backup` 生成一致性备份，恢复步骤见

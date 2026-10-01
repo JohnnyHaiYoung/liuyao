@@ -34,6 +34,21 @@ interface ChatAppProps {
 type Banner = { kind: 'error' | 'info'; text: string } | null;
 
 const MESSAGE_PAGE_SIZE = 50;
+const CONVERSATION_PAGE_SIZE = 30;
+
+/** 按 id 去重并按更新时间倒序合并会话列表（刷新与分页加载共用）。 */
+function mergeConversations(
+  previous: ConversationSummary[],
+  incoming: ConversationSummary[],
+): ConversationSummary[] {
+  const byId = new Map<string, ConversationSummary>();
+  for (const item of previous) byId.set(item.id, item);
+  for (const item of incoming) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) => {
+    if (a.updatedAt === b.updatedAt) return a.id < b.id ? 1 : -1;
+    return a.updatedAt < b.updatedAt ? 1 : -1;
+  });
+}
 
 function formatTime(iso: string | null): string {
   if (!iso) return '';
@@ -80,6 +95,8 @@ function delay(ms: number): Promise<void> {
 
 export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }: ChatAppProps) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [conversationCursor, setConversationCursor] = useState<string | null>(null);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string>(() => newClientId());
   const [messages, setMessages] = useState<MessageDto[]>([]);
@@ -122,11 +139,35 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
     setBanner({ kind: 'error', text: '发生未知错误，请重试。' });
   }, []);
 
+  /**
+   * 刷新会话列表第一页，并与已加载的旧页合并（按 id 去重、按更新时间排序）。
+   * 保留既有 cursor，使“加载更早的会话”可以从上次的位置继续。
+   */
   const refreshConversations = useCallback(async (): Promise<ConversationSummary[]> => {
-    const page = await api.listConversations(50);
-    setConversations(page.items);
+    const page = await api.listConversations({ limit: CONVERSATION_PAGE_SIZE });
+    const merged = mergeConversations([], page.items);
+    setConversations((prev) => mergeConversations(prev, merged));
+    setConversationCursor((prev) => prev ?? page.nextCursor);
     return page.items;
   }, []);
+
+  /** 加载更早的会话（第 51 条及以前）。 */
+  const loadMoreConversations = useCallback(async (): Promise<void> => {
+    if (!conversationCursor || loadingMoreConversations) return;
+    setLoadingMoreConversations(true);
+    try {
+      const page = await api.listConversations({
+        limit: CONVERSATION_PAGE_SIZE,
+        cursor: conversationCursor,
+      });
+      setConversations((prev) => mergeConversations(prev, page.items));
+      setConversationCursor(page.nextCursor);
+    } catch (error) {
+      handleFailure(error);
+    } finally {
+      setLoadingMoreConversations(false);
+    }
+  }, [conversationCursor, handleFailure, loadingMoreConversations]);
 
   const loadMessages = useCallback(
     async (conversationId: string, options?: { before?: string | null; append?: boolean }): Promise<MessageDto[]> => {
@@ -515,6 +556,18 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
               </div>
             );
           })}
+
+          {conversationCursor ? (
+            <button
+              type="button"
+              className="button ghost"
+              style={{ margin: '6px 2px 2px' }}
+              onClick={() => void loadMoreConversations()}
+              disabled={loadingMoreConversations}
+            >
+              {loadingMoreConversations ? '加载中…' : '加载更早的会话'}
+            </button>
+          ) : null}
         </div>
 
         <div className="sidebar-footer">

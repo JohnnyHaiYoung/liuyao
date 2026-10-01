@@ -1,0 +1,27 @@
+# 真实 SSE 抓取（HTTP POST http://127.0.0.1:3100/api/conversations/<id>/messages）
+# 抓取时间：2026-10-01T17:10:59.938Z
+# 帧总数：135（事件序列：start → delta → done）
+# 下面保留前 8 帧与最后 1 帧，中间用省略标记代替
+
+event: start
+data: {"conversationId":"260807e0-99da-4f09-b18b-57342e216e3e","userMessageId":"b263c91c-2ff1-414d-8c04-edc6a08806bb","assistantMessageId":"8c04f7a8-931a-4744-8d9f-977d268a6587","provider":"deepseek","model":"deepseek-flash","promptVersion":"phase1-v1","conversationTitle":"请用一句话说明：当前版本是否已经接入 Wiki …"}
+event: delta
+data: {"text":"当前"}
+event: delta
+data: {"text":"版本"}
+event: delta
+data: {"text":"**"}
+event: delta
+data: {"text":"两项"}
+event: delta
+data: {"text":"都"}
+event: delta
+data: {"text":"未"}
+event: delta
+data: {"text":"接入"}
+
+# …（省略 126 帧，主要是 delta 增量）…
+
+event: done
+data: {"assistantMessageId":"8c04f7a8-931a-4744-8d9f-977d268a6587","status":"completed","usage":{"inputTokens":365,"outputTokens":172,"totalTokens":537}}
+

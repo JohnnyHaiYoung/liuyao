@@ -78,8 +78,11 @@ export const api = {
   logout(): Promise<{ loggedOut: boolean }> {
     return requestJson<{ loggedOut: boolean }>('/api/auth/logout', { method: 'POST' });
   },
-  listConversations(limit = 50): Promise<ConversationListResponse> {
-    return requestJson<ConversationListResponse>(`/api/conversations?limit=${limit}`);
+  listConversations(options?: { limit?: number; cursor?: string | null }): Promise<ConversationListResponse> {
+    const params = new URLSearchParams();
+    params.set('limit', String(options?.limit ?? 30));
+    if (options?.cursor) params.set('cursor', options.cursor);
+    return requestJson<ConversationListResponse>(`/api/conversations?${params.toString()}`);
   },
   createConversation(clientConversationId: string): Promise<CreateConversationResponse> {
     return requestJson<CreateConversationResponse>('/api/conversations', {

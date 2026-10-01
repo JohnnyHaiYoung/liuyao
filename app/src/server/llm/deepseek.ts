@@ -1,6 +1,13 @@
 import { ERROR_CODES } from '@/shared/types';
 import { getConfig } from '../config';
-import { EMPTY_USAGE, type LlmProvider, type LlmStreamHandlers, type LlmStreamOptions, type LlmStreamResult, type LlmUsage } from './types';
+import {
+  EMPTY_USAGE,
+  type LlmProvider,
+  type LlmStreamHandlers,
+  type LlmStreamOptions,
+  type LlmStreamResult,
+  type LlmUsage,
+} from './types';
 
 /**
  * DeepSeek 官方 Chat Completions 适配器（阶段 1）。
@@ -8,6 +15,11 @@ import { EMPTY_USAGE, type LlmProvider, type LlmStreamHandlers, type LlmStreamOp
  * - 固定 `stream: true`，并请求 `stream_options.include_usage`。
  * - 上游 SSE 增量在这里被转换为本项目的事件语义，绝不原样透传给浏览器。
  * - API Key 只存在于服务器环境变量与本次请求头中，不写日志、不进事件。
+ *
+ * 终止语义（验收报告 2026-10-02 第 1 条修复点）：
+ *   只有**同时**满足「收到 `data: [DONE]` 终止标记」且「结束原因可接受」才算 completed；
+ *   缺少任一条件（提前 EOF、连接被重置、上游报错、没有 finish_reason）都记为 failed，
+ *   并保留已经生成的部分正文，由上层写入数据库并告知页面。
  */
 
 interface DeepSeekChunk {
@@ -22,6 +34,9 @@ interface DeepSeekChunk {
   } | null;
   model?: string;
 }
+
+/** 可接受的正常结束原因（必须同时收到 [DONE] 才会记为 completed）。 */
+const ACCEPTABLE_FINISH_REASONS = new Set(['stop', 'tool_calls', 'length']);
 
 function toUsage(raw: DeepSeekChunk['usage']): LlmUsage {
   if (!raw) return { ...EMPTY_USAGE };
@@ -82,6 +97,8 @@ export class DeepSeekProvider implements LlmProvider {
     let usage: LlmUsage = { ...EMPTY_USAGE };
     let usedModel = options.model;
     let finishReason: string | null = null;
+    /** 是否收到上游的 `data: [DONE]` 终止标记。 */
+    let sawDone = false;
 
     const body: Record<string, unknown> = {
       model: options.model,
@@ -124,7 +141,7 @@ export class DeepSeekProvider implements LlmProvider {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
 
-      for (;;) {
+      readLoop: for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         // stream: true 让解码器自行处理跨分块的 UTF-8 字符。
@@ -140,7 +157,9 @@ export class DeepSeekProvider implements LlmProvider {
           if (!line.startsWith('data:')) continue;
           const payload = line.slice(5).trim();
           if (payload === '[DONE]') {
-            break;
+            sawDone = true;
+            // 跳出内层解析与外层读取：收到终止标记后不再等待 EOF。
+            break readLoop;
           }
 
           let chunk: DeepSeekChunk;
@@ -168,15 +187,20 @@ export class DeepSeekProvider implements LlmProvider {
         }
       }
 
+      if (sawDone) {
+        // 已经拿到终止标记，不必再等上游关闭连接。
+        try {
+          await reader.cancel();
+        } catch {
+          /* 连接可能已由上游关闭 */
+        }
+      }
+
       const latencyMs = Date.now() - started;
+
+      // 1) 上游明确给出的终止性原因，优先处理。
       if (finishReason === 'content_filter') {
-        return {
-          status: 'failed',
-          usedModel,
-          usage,
-          errorCode: ERROR_CODES.contentFiltered,
-          finishReason,
-        };
+        return { status: 'failed', usedModel, usage, errorCode: ERROR_CODES.contentFiltered, finishReason };
       }
       if (finishReason === 'insufficient_system_resource') {
         return {
@@ -184,7 +208,7 @@ export class DeepSeekProvider implements LlmProvider {
           usedModel,
           usage,
           errorCode: ERROR_CODES.upstreamUnavailable,
-          errorDetail: '上游报告 insuffient_system_resource',
+          errorDetail: '上游报告 insufficient_system_resource',
           finishReason,
         };
       }
@@ -197,6 +221,32 @@ export class DeepSeekProvider implements LlmProvider {
           finishReason,
         };
       }
+
+      // 2) 终止标记与结束原因缺一不可；否则视为被截断，绝不谎报完成。
+      if (!sawDone || finishReason === null) {
+        return {
+          status: 'failed',
+          usedModel,
+          usage,
+          errorCode: ERROR_CODES.upstreamTruncated,
+          errorDetail:
+            `上游响应未正常结束：sawDone=${sawDone} finishReason=${finishReason ?? 'null'}` +
+            ` latency=${latencyMs}ms`,
+          finishReason,
+        };
+      }
+      if (!ACCEPTABLE_FINISH_REASONS.has(finishReason)) {
+        return {
+          status: 'failed',
+          usedModel,
+          usage,
+          errorCode: ERROR_CODES.upstreamTruncated,
+          errorDetail: `上游结束原因不可接受：${finishReason}`,
+          finishReason,
+        };
+      }
+
+      // 3) 正常完成；被 max_tokens 截断时保留 completed 但带上明确标记。
       if (finishReason === 'length') {
         return {
           status: 'completed',
@@ -207,7 +257,6 @@ export class DeepSeekProvider implements LlmProvider {
           errorDetail: `输出达到长度上限（latency ${latencyMs}ms）`,
         };
       }
-
       return { status: 'completed', usedModel, usage, finishReason };
     } catch (error) {
       const aborted = isAbortError(error);
