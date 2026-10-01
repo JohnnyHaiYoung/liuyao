@@ -14,6 +14,7 @@
 - [研发计划与阶段验收](docs/development_plan.md)
 - [第一阶段研发任务书](docs/phase1_development_spec.md)
 - [第一阶段交付说明（实现、接口、SSE、备份恢复、验收实测）](docs/phase1_delivery.md)
+- [第一阶段独立验收记录（2026-10-02）](docs/phase1_acceptance_2026-10-02.md)
 - [第一阶段开发 AI 提示词](docs/phase1_developer_prompt.md)
 - [首版验收清单](docs/acceptance_checklist.md)
 - [开发 AI 交接说明](docs/developer_handoff.md)
