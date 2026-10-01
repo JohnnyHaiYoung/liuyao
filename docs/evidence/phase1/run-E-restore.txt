@@ -1,0 +1,17 @@
+restore from : E:\workspace-ai\xuanxue\liuyao\storage\verify-fake\backups\liuyao-20261001-214831.db
+app dir      : E:\workspace-ai\xuanxue\liuyao\app
+storage dir  : E:\workspace-ai\xuanxue\liuyao\storage\verify-restore
+port         : 3100
+fake model   : False
+api key given: False
+
+server ready (stderr log: E:\workspace-ai\xuanxue\liuyao\storage\verify-restore\server-first.err.log)
+
+=== restore drill: read history from the restored database ===
+重启后仍可登录，历史会话 2 条：
+  - 「请用一句话说明：当前版本是否已经接入 Wiki …」 消息 2 条，状态 {"completed":2}，模型 fake-stream-v1，更新时间 2026-10-01T13:46:54.221Z
+  - 「验收自检会话（手动标题）」 消息 6 条，状态 {"completed":5,"interrupted":1}，模型 fake-stream-v1，更新时间 2026-10-01T13:46:26.460Z
+数据库文件：..\storage\verify-restore\liuyao.db（73728 字节）
+本次抽查的消息总数：8
+
+=== server stderr tail (must contain no API key) ===

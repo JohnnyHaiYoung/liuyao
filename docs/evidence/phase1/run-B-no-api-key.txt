@@ -1,0 +1,46 @@
+app dir      : E:\workspace-ai\xuanxue\liuyao\app
+storage dir  : E:\workspace-ai\xuanxue\liuyao\storage\verify-nokey
+port         : 3100
+fake model   : False
+api key given: False
+
+server ready (stderr log: E:\workspace-ai\xuanxue\liuyao\storage\verify-nokey\server-first.err.log)
+
+=== phase 1 verification ===
+验收目标：http://127.0.0.1:3100
+存储目录：E:\workspace-ai\xuanxue\liuyao\storage\verify-nokey
+验收密码：已提供（不打印）
+
+[通过] healthz 存活检查 — 数据库迁移 1 个；模型 deepseek-flash；已配置密钥=false；已配置拥有者密码=true
+[通过] 密钥未出现在响应中 — 响应体不含 API Key 片段
+[通过] 未登录访问会话列表被拒绝 — HTTP 401 code=auth_required
+[通过] 未登录访问 /api/auth/me 被拒绝 — HTTP 401
+[通过] 错误密码返回统一错误 — HTTP 401 code=invalid_credentials
+[通过] 登录成功 — 拥有者=owner；Cookie 已下发
+[通过] 会话 Cookie 属性 — httponly=true samesite=lax=true secure=false
+[通过] 登录后读取 /api/auth/me — HTTP 200
+[通过] 已登录可打开聊天页面（服务端渲染） — HTTP 200；新建按钮=true 输入框=true 标题=true 长度=7065
+[通过] 未登录访问首页被重定向到登录页 — HTTP 307 location=/login
+[通过] 登录页可渲染且含密码输入框 — HTTP 200；密码框=true
+[通过] 新建会话 — HTTP 201 id=57793d13 created=true
+[通过] 同一草稿 ID 不重复建会话 — created=false
+[通过] 缺少 API Key 时返回安全错误 — HTTP 503 code=llm_not_configured；响应不含密钥=true
+[通过] 密钥缺失时不产生半条会话记录 — 该会话消息数=0
+[受阻] 流式问答 / 停止生成 / 用量保存 — 需要配置 DEEPSEEK_API_KEY 后重跑本脚本
+[受阻] 停止生成并保存 interrupted — 需要配置 DEEPSEEK_API_KEY 后重跑
+[受阻] 重复 clientMessageId 去重 — HTTP 503（需要可用的模型调用）
+[通过] 会话标题手动重命名 — HTTP 200 titleSource=manual
+[受阻] 历史列表可见且顺序按更新时间 — 没有已保存消息的会话不会出现在历史列表（需要一次成功的问答）
+[通过] 手动标题不被后续消息覆盖 — 当前标题=验收自检会话（手动标题） titleSource=manual
+[通过] 重新登录（模拟刷新/新浏览器） — HTTP 200
+[受阻] 重新登录后仍能读到历史消息 — 消息数=0
+[通过] SQLite 数据库位于持久化 storage/ — ..\storage\verify-nokey\liuyao.db（4096 字节）
+[通过] WAL 模式已启用并产生 -wal 文件 — 存在 liuyao.db-wal
+[通过] 退出登录后历史接口不可访问 — logout HTTP 200；退出后 /api/conversations HTTP 401
+
+================ 验收自检汇总 ================
+通过 21 / 未通过 0 / 受阻 5 / 信息 0
+提示：「受阻」通常表示服务器未配置 DEEPSEEK_API_KEY，配置后重跑即可获得完整证据。
+
+=== server stderr tail (must contain no API key) ===
+[liuyao] 登录失败 ip=::ffff:127.0.0.1

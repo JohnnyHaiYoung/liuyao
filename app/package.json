@@ -1,0 +1,34 @@
+{
+  "name": "liuyao-agent-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Liuyao Agent 第一阶段：可持久保存的自由聊天网站（Next.js App Router + SQLite + DeepSeek Flash SSE）",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "hash-password": "node scripts/hash-password.mjs",
+    "db:backup": "node scripts/db-backup.mjs",
+    "db:info": "node scripts/db-info.mjs",
+    "verify:phase1": "node scripts/verify-phase1.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

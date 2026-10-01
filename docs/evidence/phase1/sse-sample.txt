@@ -1,0 +1,27 @@
+# 真实 SSE 抓取（HTTP POST http://127.0.0.1:3100/api/conversations/<id>/messages）
+# 抓取时间：2026-10-01T13:46:54.223Z
+# 帧总数：211（事件序列：start → delta → comment → done）
+# 下面保留前 8 帧与最后 1 帧，中间用省略标记代替
+
+event: start
+data: {"conversationId":"e2a07f9f-1b44-4706-8983-aea62e209fde","userMessageId":"9aa5aa0f-7899-45b3-9465-364ced102ed4","assistantMessageId":"91558c1b-90a3-40b4-ba24-7d1c3f413e15","provider":"fake","model":"fake-stream-v1","promptVersion":"phase1-v1","conversationTitle":"请用一句话说明：当前版本是否已经接入 Wiki …"}
+event: delta
+data: {"text":"（"}
+event: delta
+data: {"text":"验"}
+event: delta
+data: {"text":"收"}
+event: delta
+data: {"text":"用"}
+event: delta
+data: {"text":"假"}
+event: delta
+data: {"text":"模"}
+event: delta
+data: {"text":"型"}
+
+# …（省略 202 帧，主要是 delta 增量）…
+
+event: done
+data: {"assistantMessageId":"91558c1b-90a3-40b4-ba24-7d1c3f413e15","status":"completed","usage":{"inputTokens":0,"outputTokens":208,"totalTokens":208}}
+
