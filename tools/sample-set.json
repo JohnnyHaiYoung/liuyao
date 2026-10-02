@@ -1,0 +1,55 @@
+{
+  "version": "2026-10-02",
+  "sourceRoot": "F:\\道教\\六爻",
+  "note": "第二阶段小样本。path 为相对 F:\\道教\\六爻 的路径；role 仅表示任务书要求的格式覆盖，不代表对内容、作者或质量的认定。选择依据见 corpus/reports/ 中每份来源的人工抽查记录。",
+  "samples": [
+    {
+      "role": "TXT-1",
+      "path": "五行所属行业\\六爻取用神之辩证看法.txt",
+      "format": "txt",
+      "expectedEncoding": "gb18030",
+      "purpose": "与现有 Wiki 取用神试点同源，复核原件→Wiki 的链条；单一来源观点的取用神差异讨论"
+    },
+    {
+      "role": "TXT-2",
+      "path": "《周易预测学》讲义..txt",
+      "format": "txt",
+      "expectedEncoding": "gb18030",
+      "purpose": "篇幅较长的讲义；检查编码、章节切分，以及文中对梅花易数与摇卦六爻的方法区分"
+    },
+    {
+      "role": "DOCX",
+      "path": "五行所属行业\\六爻爻象详解.docx",
+      "format": "docx",
+      "purpose": "检查段落、表格与嵌图的顺序和保留情况"
+    },
+    {
+      "role": "DOC-LEGACY",
+      "path": "六爻用神答疑（51页）王虎应.top.doc",
+      "format": "doc",
+      "purpose": "旧版二进制 DOC 的真实签名识别与转换，并与取用神 TXT 形成可比观点"
+    },
+    {
+      "role": "PDF-TEXT",
+      "path": "邵伟华周易预测学(下)  ..pdf",
+      "format": "pdf",
+      "purpose": "有文字层的 PDF：检查页码、阅读顺序与提取顺序；用于与讲义对照"
+    },
+    {
+      "role": "PDF-SCAN",
+      "path": "张成达八字六爻风水31册\\11、张成达-六爻快速断卦法.pdf",
+      "format": "pdf-scan",
+      "purpose": "扫描件（CCITTFax 黑白图）：测试离线中文 OCR、卦名与术语识别质量"
+    }
+  ],
+  "deferred": [
+    {
+      "path": "《六爻归真》完整版 ..top.doc",
+      "reason": "同为旧版 DOC，样本量已够；留待后续批次"
+    },
+    {
+      "path": "六爻中高级班讲课记录_20200607165625.doc",
+      "reason": "现有盘点记录其真实签名为 RTF 而非 DOC，属于格式异常样本，本阶段不占用旧 DOC 名额"
+    }
+  ]
+}

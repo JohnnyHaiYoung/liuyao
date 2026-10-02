@@ -122,8 +122,32 @@ const lines = [
   '',
 ];
 
+// 终止事件与落库状态检查：避免把“模型调用失败”的抓取当作成功取证
+// （阶段 1 复验记录 docs/phase1_reacceptance_2026-10-02.md 的非阻断发现）。
+const eventNames = frames.map((f) => /^event:\s*(\S+)/m.exec(f)?.[1]).filter(Boolean);
+const hasDone = eventNames.includes('done');
+const hasError = eventNames.includes('error');
+let assistantStatus = null;
+try {
+  const listResponse = await call('GET', `/api/conversations/${conversationId}/messages?limit=50`);
+  const page = await listResponse.json();
+  const assistant = [...(page.items ?? [])].reverse().find((item) => item.role === 'assistant');
+  assistantStatus = assistant?.status ?? null;
+} catch {
+  assistantStatus = null;
+}
+
+if (!hasDone || hasError || assistantStatus !== 'completed') {
+  console.error(
+    `抓取未成功：事件序列 ${eventNames.join(' → ') || '(空)'}，数据库助手状态=${assistantStatus ?? '未知'}。` +
+      (hasError ? ' 本次流内出现 error 事件。' : '') +
+      ' 未写出示例文件（避免把失败取证当作成功示例）。',
+  );
+  process.exit(1);
+}
+
 if (outFile) {
   fs.writeFileSync(outFile, `${lines.join('\n')}\n`, 'utf8');
   console.log(`已写入 ${outFile}`);
 }
-console.log(`帧总数 ${frames.length}；会话 ${conversationId}`);
+console.log(`帧总数 ${frames.length}；会话 ${conversationId}；终止事件 done；数据库状态 ${assistantStatus}`);
