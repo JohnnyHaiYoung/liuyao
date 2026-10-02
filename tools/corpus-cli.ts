@@ -750,6 +750,14 @@ function cleanText(source: ManifestSource, outcome: ExtractOutcome, pageAssets: 
       } else if (hasBlockChars) {
         missingFigurePages.push(group.page);
       }
+      // 若该页已有结构化转写（人工目视原页图），在页内给出链接。
+      const figureFile = `corpus/figures/${source.source_id}/page-${String(group.page).padStart(3, '0')}.md`;
+      if (fs.existsSync(fromProjectRelative(figureFile))) {
+        body.push(
+          `> 卦盘结构化转写（人工目视原页图核对）：[第 ${group.page} 页转写](${path.posix.relative('corpus/cleaned', figureFile)})`,
+        );
+        body.push('');
+      }
       if (hasBlockChars) {
         body.push(
           `> ⚠ 本页含方块占位字符（██ 等）：原书卦图/爻位无法由文字层还原，**本页卦例不作为默认规则**；` +
@@ -1049,6 +1057,8 @@ function commandVerify(): void {
   walk(path.join(projectRoot, 'wiki'));
   // 清洗文本也含相对链接（来源页、原页图），必须一起校验。
   walk(cleanedDir);
+  // 卦盘等结构化转写文件同样参与链接与出处校验。
+  walk(path.join(projectRoot, 'corpus', 'figures'));
   // 链接目标允许 <...> 形式（文件名含括号时必须使用），因此正则先匹配尖括号整体。
   const markdownLink = /\[[^\]]*\]\(\s*(<[^>]*>|[^)]+)\s*\)/g;
   for (const file of wikiFiles) {
@@ -1213,7 +1223,24 @@ function commandVerify(): void {
     }
   }
 
-  // 7) 原始字节独立命中：不经提取器，直接在原始载体里找抽样段落。
+  // 7) 卦盘结构化转写：必须写明 source_id 且原页图链接有效。
+  for (const file of wikiFiles.filter((item) => relativeToProject(item).startsWith('corpus/figures/'))) {
+    const relativeFile = relativeToProject(file);
+    const content = fs.readFileSync(file, 'utf8');
+    const hasSource = /`src-[0-9a-f]{12,}`/.test(content);
+    const imageMatch = /!?\[[^\]]*\]\(([^)]*page-\d{3}\.jpg)\)/.exec(content);
+    const imageExists = imageMatch ? fs.existsSync(path.resolve(path.dirname(file), imageMatch[1]!)) : false;
+    findings.push({
+      level: hasSource && imageExists ? 'ok' : 'fail',
+      scope: relativeFile,
+      message:
+        hasSource && imageExists
+          ? '卦盘转写含 source_id 且原页图链接有效'
+          : '卦盘转写缺少 source_id 或原页图链接失效',
+    });
+  }
+
+  // 8) 原始字节独立命中：不经提取器，直接在原始载体里找抽样段落。
   for (const source of manifest) {
     if (!['txt', 'doc', 'docx'].includes(source.format) || !source.processing.cleanedPath) continue;
     const cleanedText = fs.readFileSync(fromProjectRelative(source.processing.cleanedPath), 'utf8');
