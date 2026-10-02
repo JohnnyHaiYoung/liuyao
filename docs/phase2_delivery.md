@@ -181,3 +181,19 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 - **旧 DOC 的第二种解析方式**：本机 Word COM 此前一直挂起，本轮定位到两个具体原因并绕开——① `Start-Process` 被 `NO_PROXY`/`no_proxy` 大小写冲突阻断（改用同进程 STA runspace + 超时）；② Word 类型库注册损坏导致 `TYPE_E_CANTLOADLIBRARY`（改用 `InvokeMember` 纯晚绑定）；③ Word 的 `wdFormatUnicodeText` 在本机实际写出 GB18030（改为原样保存字节 + Node 侧编码嗅探）。结果见 [src-3f8243c07930-word-crosscheck.md](../corpus/reports/src-3f8243c07930-word-crosscheck.md)：Word 独立渲染自报 **51 页 / 32431 词 / 860 段**，**汉字数 26372 与自实现解析完全一致**，自实现行 48.6% 能在 Word 文本中找到逐字一致行（差异为换行与域代码写法）。**版式仍未验证**（本对照只比文字），这一点在报告与来源页中写明。
 
 新的交接包：`dist/liuyao-phase2-corpus-20261002.zip`，99 个文件、8,700,946 字节，SHA-256 见 [phase2_pack_inventory.md](phase2_pack_inventory.md)（连续两次打包字节一致）。
+
+## 14. DOCX / 旧 DOC 的第二条独立路径（Windows/Office 自带 IFilter）
+
+本机无网络（PyPI 与 npm registry 均不可达），无法安装 `pypdf`/`python-docx`/`olefile` 等第三方解析器作对照。改用**系统已安装的文本过滤器**（`query.dll!LoadIFilter`，离线、零下载）：
+
+| 格式 | 系统过滤器 | 独立提取汉字数 | 自实现汉字数 | 差异 |
+| --- | --- | ---: | ---: | --- |
+| `.docx` | Office `OFFFILTX.DLL` | **2,261** | **2,261** | **0%** |
+| `.doc` | Windows `OffFilt.dll` | **26,103** | 26,372 | 1.0%（换行/域代码写法） |
+| `.pdf` | `Windows.Data.Pdf.dll` | — | 14,935 | 该过滤器 `LoadIFilter` 调用抛异常，**未取得**（已记为已知缺口） |
+
+- DOCX 另做**容器容量核算**：解析 ZIP 各条目解压尺寸，`word/document.xml` 解压后 83,815 字节、2,261 汉字，全包理论汉字上限约 2,293 —— 自实现覆盖 98.6%，且与 IFilter 结果逐字一致。
+- 旧 DOC 现在有**三条互相独立的读取路径**：自实现 OLE2/分片表、Word 独立渲染（26,372）、Windows IFilter（26,103）。
+- **过程中的一个真实教训（已修）**：IFilter 首版实现复用了同一个 `StringBuilder`，只清 `Length` 而不换缓冲，导致追加了上一次缓冲的残留与垃圾字符，把 DOCX 的 2,261 汉字虚报成 51,461（23 倍）。修正为每次调用分配新缓冲后即为上表数值。**该 51,461 的数字在任何报告里都不作为证据使用。**
+- PDF 的独立核对仍依靠：渲染原页图后的人工目视（第 1、2、3、20 页）与既有盘点的字符量吻合（第 1 页 749 字符 vs 盘点 752 非空白字符）。
+- 工具：`tools/offline/ifilter-extract.ps1`（提取）、`tools/offline/ifilter-crosscheck.mjs`（对照与重复检测）、`tools/offline/docx-capacity-check.mjs`（容量核算）、`tools/offline/word-probe.ps1`、`word-convert-late.ps1`、`doc-crosscheck.mjs`。这些只用于**开发期核对**，不进运行时依赖。

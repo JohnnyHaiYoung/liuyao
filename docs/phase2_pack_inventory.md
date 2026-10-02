@@ -1,9 +1,9 @@
 # 第二阶段资料交接包清单
 
 - 归档：`dist/liuyao-phase2-corpus-20261002.zip`
-- 归档 SHA-256：`077e7186ec7cfcb3816e4b8f99b4cf45abfc7d2ed757e29f46112eaef4274dae`
-- 归档字节数：8,702,267
-- 内含文件：99（含包内 `PACK-MANIFEST.txt`）
+- 归档 SHA-256：`650fdbc7ade727aebc90377dc3eb0b6a0caf710aa7671b7cbee9cb2a891e27e8`
+- 归档字节数：8,712,779
+- 内含文件：104（含包内 `PACK-MANIFEST.txt`）
 - 生成命令：`node tools/corpus-cli.ts pack --out dist/liuyao-phase2-corpus-20261002.zip`
 - 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核
 
@@ -73,13 +73,15 @@ fea21bb601018cd6c0eb80e1cfce01d7b21803e0120591578d24dbed891024d0       3903  cor
 20fe8667703c114447474d5bb1e30c92dd10c02bcd7a7e57e2756e83003b47d6       2807  corpus/reports/spotcheck/src-f3f838d501b1.json
 b3deeb40958c1813680f2f89c2dab4d85ab91332880259a733977cbe2d5b02fb       3816  corpus/reports/src-08862b06aea9.md
 7de34984220a35979e8990f8f1ec77296d4575dd7c4dadb928f8829857709398       4204  corpus/reports/src-25fcddea758b.md
+221a5ca8616fe88be610b7a21f21c7f170f32fdccea8e3e00322324ed5b3f06d       1466  corpus/reports/src-3f8243c07930-ifilter-crosscheck.md
 3ba48eae2676e54be1b26774eb8ad447c05c3b92e6992e1375133f2c82fd80d8       5540  corpus/reports/src-3f8243c07930-word-crosscheck.md
 f914605f9591495a8885c03ef760050393178a33436b3f4a9a896f8826e37f0a       4616  corpus/reports/src-3f8243c07930.md
+781cdb6aabf60e1a57455684081b3da39a6e7fa20d7e854481f8dbb76dd274da       1416  corpus/reports/src-946795472cd6-ifilter-crosscheck.md
 2fd200470be31776c48cc38996dd897ec088521c42ad87c677627f6624f2b738       3641  corpus/reports/src-946795472cd6.md
 20dc85aecc16d79885aeac29ffd5b7e61322545dd496d4932010eb0810fc2172       7219  corpus/reports/src-e6fc8612e955.md
 69888e3753f84297e7b76f31fd2b70d088276c6c3dcee29920c7d8a875354842       5375  corpus/reports/src-f3f838d501b1.md
 645d957f4488c3c3f23a4c8f7ce3f195061b59532ea106a19c2fe00511df3cf5       7918  docs/phase2_acceptance_2026-10-02.md
-5ac510714ed73541bef8839de014d9eac63be26eda30152181daca01fc225be7      22923  docs/phase2_delivery.md
+f0f783d89ec5cb25e16ac91f697a52f2bec8df08a29547eb8eea0ad29ecfa39c      24949  docs/phase2_delivery.md
 15ab8e194120f073ce74c3ff69e8ce48bb5dad59807e0099a4ab1524536a22f7      12921  docs/phase2_development_spec.md
 b4956a9e511c5de453e5ac1275219d181d39898f24dfec6e3a7ecfcf18890f81       3431  README.md
 f5e6a6ce68633ae1eb305ee2fee46daf0f0ece5fd993899df17af07844def9d7       6623  tools/build_source_inventory.py
@@ -90,6 +92,9 @@ a35f3ca85bbc38971d103f9a352121a3df083fd56d2253d49064b9f709960f78      21739  too
 3f8faf0713536d63b3ee8cfeda114ceadae89a7874ad202db2c815d119587906       2926  tools/lib/zip.ts
 627e2b40edbdf09268efac8016bf9d616298b15e3083b1c541112a91eb1a32f9       7247  tools/offline/accept-isolation-test.mjs
 8bd5327d320aee4e4e80d3fb974126843d3e91fb8dc96bd346958e25ed29dd05       7652  tools/offline/doc-crosscheck.mjs
+8507c54bb16db937eff0748ad58d9fc52829b83eaf5197d016d36b141cbd3600       1763  tools/offline/docx-capacity-check.mjs
+259ea5ac1741d3af3fa1e064cac07ebd3403abcb97c3932d5814ad6686c8b8ca       6742  tools/offline/ifilter-crosscheck.mjs
+824c43fb63359bc30a2a0b5c7fa5d15fa372cb7372208ee0c8af49294e0824da       4414  tools/offline/ifilter-extract.ps1
 5a4e0ef26bab5e2f0ea2c34bb02e0650711a80907b905ab4f2b67d7d3312e7ac       2538  tools/offline/image-downscale.ps1
 6e91984712b3ed2b0dd7e51a5f93326b4954c4e3f7d98854f9185cbf2276796c       7029  tools/offline/ocr-image.ps1
 397da60b1c8c7de1766337c38c2ebc814b11102b355697e0452d442d147e0558       5415  tools/offline/pdf-render.ps1
@@ -104,8 +109,8 @@ d1798f0b8d02f6f222a501a580fa73bd6a3b0732ba3a3eb86b358e3b5599c317       6117  too
 eca9273f4481fa85f723b17c7b06f94772aa5394f3c2fb92bee6bb55353a7aac       2598  wiki/schema.md
 792b354dba7a5dc0adf93a3c8451aa05b9e976961a3a0c3f47d7162f4890f5ec       2923  wiki/sources/src-08862b06aea9.md
 9cec3a333ac144813fcb900ee998e69e9081614b6e0bc767cda1240c6f2804a6       3000  wiki/sources/src-25fcddea758b.md
-e02dae4aeb6b8969958ac291ff696ee712020ca614cbacaf9c5cacc9ebaeaaf8       3477  wiki/sources/src-3f8243c07930.md
-e633d54bdd63f42ebcc755754ec8d035a804cff41d12a65765f648efb175efd4       2874  wiki/sources/src-946795472cd6.md
+3e390dbf2492a8d6ba39f633ba7600e6db10beda51fa68378683de6661a2733b       3801  wiki/sources/src-3f8243c07930.md
+994d79a7e170c02d480522595c848d84128448dc85e9fc9129272624f240380d       3322  wiki/sources/src-946795472cd6.md
 6bf457e4d83892ee0297ebff36e0f379ef214f1a54a10979ae5ebb3e5ffa27f7       5468  wiki/sources/src-e6fc8612e955.md
 7fe0bf75fa513a1971da8e1cc252f8ccafe6bac9c2171be839e37fd0c4482458       4130  wiki/sources/src-f3f838d501b1.md
 ```
