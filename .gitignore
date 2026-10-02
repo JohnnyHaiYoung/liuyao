@@ -1,15 +1,8 @@
-# Large imported and generated corpus files. Release packaging must include them.
+# 只排除体积大且含第三方版权的原件；其余资料产物（manifest、extracted、cleaned、assets、reports）
+# 随仓库交付，避免"克隆仓库即丢失阶段 2 资料"。完整交接包（含原件）用
+# tools/corpus-cli.ts pack 生成，清单与哈希见 docs/phase2_pack_inventory.md。
 /corpus/originals/*
 !/corpus/originals/README.md
-/corpus/extracted/*
-!/corpus/extracted/README.md
-/corpus/cleaned/*
-!/corpus/cleaned/README.md
-/corpus/assets/*
-!/corpus/assets/README.md
-/corpus/reports/*
-!/corpus/reports/README.md
-/corpus/manifest.jsonl
 /dist/
 
 # Local credentials and Python environments

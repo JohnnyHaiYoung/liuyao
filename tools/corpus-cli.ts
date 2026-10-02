@@ -52,8 +52,9 @@ import {
   writeManifest,
   type ManifestSource,
 } from './lib/common.ts';
-import { readDocx, readLegacyDoc } from './lib/office.ts';
+import { readDocx, readLegacyDoc, readZip } from './lib/office.ts';
 import { readPdf } from './lib/pdf.ts';
+import { createZip } from './lib/zip.ts';
 
 interface SampleDefinition {
   role: string;
@@ -110,7 +111,10 @@ function buildPageAssets(source: ManifestSource, pages: string): { assets: strin
 }
 
 function readSampleSet(): SampleSet {
-  return JSON.parse(fs.readFileSync(sampleSetPath, 'utf8')) as SampleSet;
+  // 默认使用 tools/sample-set.json；--sample-set <file> 用于隔离样本集的复验（例如同哈希/空文件场景）。
+  const index = process.argv.indexOf('--sample-set');
+  const file = index >= 0 && process.argv[index + 1] ? process.argv[index + 1]! : sampleSetPath;
+  return JSON.parse(fs.readFileSync(file, 'utf8')) as SampleSet;
 }
 function sourceIdForSha(sha256: string): string {
   // 与既有试点 ID 规则一致（src- + sha256 前 12 位）；碰撞时由 manifest 检查提示扩位。
@@ -205,41 +209,48 @@ function commandImport(): void {
     if (collision) throw new Error(`source_id 碰撞：${sourceId} 已被 ${collision.sourceRelativePathFromF} 占用，需要扩位`);
 
     ensureDir(path.dirname(originalAbsolute));
-    if (!fs.existsSync(originalAbsolute) || sha256File(originalAbsolute) !== sourceSha) {
-      fs.copyFileSync(sourcePath, originalAbsolute);
-    }
-    const copySha = sha256File(originalAbsolute);
-    if (copySha !== sourceSha) throw new Error(`复制后哈希不一致：${sample.path}`);
-
-    const duplicate = byHash.get(sourceSha);
+    const duplicate = byHash.get(sourceSha) ?? existing.find((item) => item.source_id === sourceId);
+    const isAlias = Boolean(duplicate) && duplicate!.sourceRelativePathFromF !== sample.path;
     const aliases = new Set(duplicate?.aliasSourcePaths ?? []);
-    if (duplicate && duplicate.sourceRelativePathFromF !== sample.path) aliases.add(sample.path);
+    if (isAlias) aliases.add(sample.path);
 
+    if (!isAlias) {
+      // 首次出现的路径才复制原件；同哈希的其它路径只登记为别名（哈希相同，无需重复占空间）。
+      if (!fs.existsSync(originalAbsolute) || sha256File(originalAbsolute) !== sourceSha) {
+        fs.copyFileSync(sourcePath, originalAbsolute);
+      }
+      const copySha = sha256File(originalAbsolute);
+      if (copySha !== sourceSha) throw new Error(`复制后哈希不一致：${sample.path}`);
+    }
+
+    const prior = duplicate && !isAlias ? undefined : duplicate;
     const entry: ManifestSource = {
       source_id: sourceId,
       sha256: sourceSha,
       sizeBytes,
       format: sample.format,
       extension: path.extname(sample.path).toLowerCase(),
-      discoveredAt: existing.find((item) => item.source_id === sourceId)?.discoveredAt ?? nowIso(),
-      sourceRelativePathFromF: sample.path,
-      originalRelativePath: originalRelative,
-      aliasSourcePaths: [...aliases],
-      duplicateOf: duplicate && duplicate.sourceRelativePathFromF !== sample.path ? duplicate.source_id : null,
+      discoveredAt: duplicate?.discoveredAt ?? nowIso(),
+      // 主路径固定为首次导入的路径；后续同哈希路径进入 aliasSourcePaths，不丢失。
+      sourceRelativePathFromF: duplicate?.sourceRelativePathFromF ?? sample.path,
+      originalRelativePath: duplicate?.originalRelativePath ?? originalRelative,
+      aliasSourcePaths: [...aliases].sort(),
+      duplicateOf: null,
       suspectedVersionRelation: null,
-      processing: existing.find((item) => item.source_id === sourceId)?.processing ?? {
-        status: 'pending',
-        inputEncoding: sample.expectedEncoding ?? null,
-        extractor: null,
-        extractorVersion: null,
-        ocrLanguage: null,
-        processedAt: null,
-        extractedPath: null,
-        cleanedPath: null,
-        assetPaths: [],
-        tools: [],
-      },
-      coverage: existing.find((item) => item.source_id === sourceId)?.coverage ?? {
+      processing:
+        duplicate?.processing ?? {
+          status: 'pending',
+          inputEncoding: sample.expectedEncoding ?? null,
+          extractor: null,
+          extractorVersion: null,
+          ocrLanguage: null,
+          processedAt: null,
+          extractedPath: null,
+          cleanedPath: null,
+          assetPaths: [],
+          tools: [],
+        },
+      coverage: duplicate?.coverage ?? {
         structureSummary: '',
         totalUnits: '',
         processedUnits: '',
@@ -247,10 +258,21 @@ function commandImport(): void {
         quality: 'needs_review',
         issues: [],
       },
-      notes: [`角色：${sample.role}；用途：${sample.purpose}`],
+      notes: (duplicate?.notes ?? []).filter((note) => note.startsWith('角色：')),
     };
+    if (!entry.notes.some((note) => note.startsWith('角色：'))) {
+      entry.notes.unshift(`角色：${sample.role}；用途：${sample.purpose}`);
+    }
+    if (isAlias && !entry.notes.some((note) => note.includes(sample.path))) {
+      entry.notes.push(`别名路径（同哈希，未重复复制原件）：${sample.path}`);
+    }
+    if (prior === undefined && isAlias) {
+      entry.notes.push(`别名路径（同哈希，未重复复制原件）：${sample.path}`);
+    }
     upsertManifest(entry);
-    imported.push(`${sourceId}  ${sample.role.padEnd(11)}  ${sample.path}`);
+    // 关键：循环内实时更新哈希索引，否则同批次的第二条同哈希路径会覆盖第一条。
+    byHash.set(sourceSha, entry);
+    imported.push(`${sourceId}  ${sample.role.padEnd(11)}  ${sample.path}${isAlias ? '（同哈希别名）' : ''}`);
   }
 
   // 同名/近名但哈希不同的文件，仅登记为“待核实版本关系”，不合并。
@@ -431,6 +453,19 @@ function commandExtract(options: Map<string, string[]>): void {
       console.log(`  ${source.source_id}（${source.format}）跳过：请用 ocr 子命令处理扫描件`);
       continue;
     }
+
+    // 空正文/异常过短不得当作成功：任务书要求失败要显式记录，不能生成空白“成功文件”。
+    const nonWhitespace = outcome.text.replace(/\s/g, '').length;
+    if (nonWhitespace < 20) {
+      outcome.quality = 'failed';
+      outcome.processedUnits = '无（提取失败）';
+      outcome.unprocessed = '全文（提取失败）';
+      outcome.issues = [
+        ...outcome.issues,
+        `提取正文过短（非空白字符 ${nonWhitespace} 个）：按 failed 处理，不生成清洗文件。` +
+          '可能原因：原件为空、编码不可识别、或该格式变体不被自实现解析器支持；请检查原件后重试或换用其它工具。',
+      ];
+    }
     const extractedRelative = `corpus/extracted/${source.source_id}.txt`;
     const header = [
       `## source_id: ${source.source_id}`,
@@ -444,7 +479,7 @@ function commandExtract(options: Map<string, string[]>): void {
     writeText(fromProjectRelative(extractedRelative), `${header}${outcome.text}\n`);
 
     const stats = textStats(outcome.text, outcome.paragraphs);
-    source.processing.status = 'processed';
+    source.processing.status = outcome.quality === 'failed' ? 'failed' : 'processed';
     source.processing.inputEncoding = outcome.encoding;
     source.processing.extractor = outcome.extractor;
     source.processing.extractorVersion = outcome.extractorVersion;
@@ -595,7 +630,8 @@ function commandOcr(options: Map<string, string[]>): void {
 
 /** 为 PDF 的指定页生成页面图资产（卦图/爻位/表格等需要看原页的位置）。 */
 function commandAssets(options: Map<string, string[]>): void {
-  const pages = options.get('pages')?.[0] ?? '1-2';
+  const requested = options.get('pages')?.[0] ?? '1-2';
+  const pages = requested === 'all' ? '1-9999' : requested;
   for (const source of selectedSources(options)) {
     if (!source.format.startsWith('pdf')) {
       console.log(`  ${source.source_id} 跳过：只有 PDF 需要渲染页面图`);
@@ -634,51 +670,53 @@ const PAGE_MARKER = /^=+\s*(?:扫描页（)?PDF 第\s*(\d+)\s*页[^=]*=+$/;
  *   - pdf（文字层）/ pdf-scan（OCR）：行式文本，每行即一段，页标记单独成标题。
  * OCR 文本会折叠汉字之间的空格；不做错别字订正。
  */
-function cleanText(source: ManifestSource, outcome: ExtractOutcome): CleanResult {
+function cleanText(source: ManifestSource, outcome: ExtractOutcome, pageAssets: Map<number, string>): CleanResult {
   const notes: string[] = [];
   let removedLines = 0;
   const isOcr = source.format === 'pdf-scan';
   const lineOriented = source.format === 'pdf' || source.format === 'pdf-scan';
 
-  const rawLines = normalizeNewlines(outcome.text).split('\n');
   const paragraphs: Array<{ kind: 'page' | 'text'; value: string }> = [];
-  let buffer: string[] = [];
 
-  const flushProse = (): void => {
-    if (buffer.length === 0) return;
-    let text = buffer.join('');
-    text = normalizeFullWidthSpaces(text).trim();
-    if (text.length > 1) paragraphs.push({ kind: 'text', value: text });
-    buffer = [];
-  };
-
-  for (const rawLine of rawLines) {
-    const line = rawLine.trim();
-    const pageMatch = PAGE_MARKER.exec(line);
-    if (pageMatch) {
-      flushProse();
-      paragraphs.push({ kind: 'page', value: pageMatch[1]! });
-      continue;
+  if (lineOriented) {
+    // PDF/OCR：行式文本，每行一段，页标记单独成标题。
+    for (const rawLine of normalizeNewlines(outcome.text).split('\n')) {
+      const line = rawLine.trim();
+      const pageMatch = PAGE_MARKER.exec(line);
+      if (pageMatch) {
+        paragraphs.push({ kind: 'page', value: pageMatch[1]! });
+        continue;
+      }
+      if (line === '') continue;
+      if (WEB_JUNK_PATTERNS.some((pattern) => pattern.test(line))) {
+        removedLines += 1;
+        continue;
+      }
+      const text = normalizeFullWidthSpaces(isOcr ? collapseCjkSpaces(line) : line).trim();
+      if (text.length > 1) paragraphs.push({ kind: 'text', value: text });
     }
-    if (line === '') {
-      flushProse();
-      continue;
-    }
-    if (WEB_JUNK_PATTERNS.some((pattern) => pattern.test(line))) {
-      removedLines += 1;
-      continue;
-    }
-    let text = isOcr ? collapseCjkSpaces(line) : line;
-    text = normalizeFullWidthSpaces(text).trim();
-    if (text.length <= 1) continue;
-    if (lineOriented) {
-      flushProse();
-      paragraphs.push({ kind: 'text', value: text });
-    } else {
-      buffer.push(text);
+  } else {
+    // 散文来源（txt/doc/docx）：沿用提取阶段的段落分块，保证已有定位锚点稳定。
+    for (const block of outcome.paragraphs) {
+      const lines = block.split('\n').map((line) => line.trim());
+      const pageMatch = lines.length > 0 ? PAGE_MARKER.exec(lines[0]!) : null;
+      if (pageMatch) {
+        paragraphs.push({ kind: 'page', value: pageMatch[1]! });
+        lines.shift();
+      }
+      const kept: string[] = [];
+      for (const line of lines) {
+        if (line === '') continue;
+        if (WEB_JUNK_PATTERNS.some((pattern) => pattern.test(line))) {
+          removedLines += 1;
+          continue;
+        }
+        kept.push(line);
+      }
+      const text = normalizeFullWidthSpaces(kept.join('')).trim();
+      if (text.length > 1) paragraphs.push({ kind: 'text', value: text });
     }
   }
-  flushProse();
 
   if (removedLines > 0) notes.push(`删除疑似网页转载/广告/分隔线 ${removedLines} 行（规则见 tools/corpus-cli.ts WEB_JUNK_PATTERNS）`);
   if (isOcr) notes.push('OCR 文本：已折叠汉字之间的空格；未做错别字订正，未辨认处保持原样');
@@ -686,24 +724,64 @@ function cleanText(source: ManifestSource, outcome: ExtractOutcome): CleanResult
 
   const body: string[] = [];
   let counter = 0;
+  const blockCharPages: number[] = [];
+  const missingFigurePages: number[] = [];
+
+  // 按页分组：页标记单独成标题，并在页内嵌原页图，使图表/爻位可在 Markdown 中直接核对。
+  const groups: Array<{ page: number | null; items: string[] }> = [];
   for (const paragraph of paragraphs) {
     if (paragraph.kind === 'page') {
-      body.push(`\n## 第 ${paragraph.value} 页（PDF 实际页码）\n`);
+      groups.push({ page: Number.parseInt(paragraph.value, 10), items: [] });
       continue;
     }
-    counter += 1;
-    const anchor = stableId(source.source_id, 'paragraph', counter, paragraph.value.slice(0, 24));
-    body.push(`<!-- ¶${String(counter).padStart(4, '0')} ${anchor} -->`);
-    body.push(paragraph.value);
-    body.push('');
+    if (groups.length === 0) groups.push({ page: null, items: [] });
+    groups[groups.length - 1]!.items.push(paragraph.value);
   }
-  notes.push(`段落锚点：${counter} 个（¶0001..¶${String(counter).padStart(4, '0')}）`);
+
+  for (const group of groups) {
+    if (group.page !== null) {
+      body.push(`\n## 第 ${group.page} 页（PDF 实际页码）\n`);
+      const asset = pageAssets.get(group.page);
+      const hasBlockChars = group.items.some((item) => item.includes('█'));
+      if (hasBlockChars) blockCharPages.push(group.page);
+      if (asset) {
+        body.push(`![第 ${group.page} 页原页图](${asset})`);
+        body.push('');
+      } else if (hasBlockChars) {
+        missingFigurePages.push(group.page);
+      }
+      if (hasBlockChars) {
+        body.push(
+          `> ⚠ 本页含方块占位字符（██ 等）：原书卦图/爻位无法由文字层还原，**本页卦例不作为默认规则**；` +
+            (asset ? '请对照上方原页图人工辨认。' : '本页缺少原页图，需按第 8 节命令重跑生成后再核对。'),
+        );
+        body.push('');
+      }
+    }
+    for (const item of group.items) {
+      counter += 1;
+      const anchor = stableId(source.source_id, 'paragraph', counter, item.slice(0, 24));
+      body.push(`<!-- ¶${String(counter).padStart(4, '0')} ${anchor} -->`);
+      body.push(item);
+      body.push('');
+    }
+  }
+  notes.push(`清洗段落锚点：${counter} 个（¶0001..¶${String(counter).padStart(4, '0')}）`);
+  if (blockCharPages.length > 0) {
+    notes.push(
+      `含方块占位字符（卦图/爻位无法还原）的页：${blockCharPages.join(', ')}（共 ${blockCharPages.length} 页），` +
+        `已在各页标注并附原页图；这些页的卦例不作默认规则`,
+    );
+  }
+  if (missingFigurePages.length > 0) {
+    notes.push(`缺少原页图的卦图页：${missingFigurePages.join(', ')}（需生成资产后再核对）`);
+  }
 
   const title = titleFromPath(source.sourceRelativePathFromF);
   const front = [
     `# ${title}`,
     '',
-    `> - 来源：[\`${source.source_id}\`](../sources/${source.source_id}.md)`,
+    `> - 来源：[\`${source.source_id}\`](../../wiki/sources/${source.source_id}.md)`,
     `> - 包内原件：\`${source.originalRelativePath}\``,
     `> - 忠实提取文本：\`${source.processing.extractedPath}\``,
     `> - 覆盖范围：${source.coverage.processedUnits}${source.coverage.unprocessedUnits ? `（未处理：${source.coverage.unprocessedUnits}）` : ''}`,
@@ -718,22 +796,50 @@ function cleanText(source: ManifestSource, outcome: ExtractOutcome): CleanResult
 
 function commandClean(options: Map<string, string[]>): void {
   for (const source of selectedSources(options)) {
+    if (source.processing.status === 'failed' || source.coverage.quality === 'failed') {
+      console.log(
+        `  ${source.source_id} 跳过：来源状态为 failed（${source.coverage.issues[0] ?? '提取失败'}），不生成空白清洗文件`,
+      );
+      continue;
+    }
     if (!source.processing.extractedPath) {
       console.log(`  ${source.source_id} 跳过：还没有提取文本`);
       continue;
     }
     const outcome = rebuildOutcomeFromExtracted(source);
-    const cleaned = cleanText(source, outcome);
+    // 页图资产 → 相对 corpus/cleaned/ 的链接，使 Markdown 内可直接核对卦图/爻位。
+    const pageAssets = new Map<number, string>();
+    for (const asset of source.processing.assetPaths) {
+      const match = /page-(\d{3})\.(?:jpg|png)$/.exec(asset);
+      if (match) pageAssets.set(Number.parseInt(match[1]!, 10), path.posix.relative('corpus/cleaned', asset));
+    }
+    const cleaned = cleanText(source, outcome, pageAssets);
     const cleanedRelative = `corpus/cleaned/${source.source_id}.md`;
     writeText(fromProjectRelative(cleanedRelative), cleaned.markdown);
     source.processing.cleanedPath = cleanedRelative;
-    replaceNote(source, '清洗：', `清洗：段落 ${outcome.paragraphs.length} 个，删除行 ${cleaned.removedLines}`);
+    const anchorCount = (cleaned.markdown.match(/^<!-- ¶\d{4} /gm) ?? []).length;
+    replaceNote(
+      source,
+      '清洗：',
+      `清洗：段落锚点 ${anchorCount} 个（提取器分块 ${outcome.paragraphs.length} 个），删除行 ${cleaned.removedLines}`,
+    );
     // 清洗说明整组重建，避免复跑时重复追加。
-    source.notes = source.notes.filter((note) => !note.startsWith('清洗说明：') && !note.startsWith('段落锚点：'));
+    source.notes = source.notes.filter(
+      (note) => !note.startsWith('清洗说明：') && !note.startsWith('段落锚点：') && !note.startsWith('含方块占位字符') && !note.startsWith('缺少原页图'),
+    );
     for (const note of cleaned.notes) source.notes.push(`清洗说明：${note}`);
+    // 含卦图/爻位占位字符的来源：按任务书第 6 节缩小 usable 范围，改为 needs_review。
+    const blockNote = cleaned.notes.find((note) => note.startsWith('含方块占位字符'));
+    if (blockNote && source.coverage.quality !== 'failed') {
+      source.coverage.quality = 'needs_review';
+      const issueText = `${blockNote}。该来源的文字论述可读，但含卦图/爻位的页不作为默认规则，引用前须对照原页图`;
+      source.coverage.issues = [issueText, ...source.coverage.issues.filter((issue) => !issue.startsWith('含方块占位字符'))];
+    }
     upsertManifest(source);
     const stats = textStats(cleaned.markdown, outcome.paragraphs);
-    console.log(`  ${source.source_id}  ${cleanedRelative}  ${stats.chars} 字符 / ${outcome.paragraphs.length} 段`);
+    console.log(
+      `  ${source.source_id}  ${cleanedRelative}  ${stats.chars} 字符 / 清洗段落 ${anchorCount} 个（提取器分块 ${outcome.paragraphs.length}）`,
+    );
   }
 }
 
@@ -814,9 +920,17 @@ function commandReport(options: Map<string, string[]>): void {
     lines.push('## 4. 编码 / OCR 情况');
     lines.push('');
     lines.push(`- 输入编码或图像来源：${source.processing.inputEncoding ?? '（未记录）'}`);
+    const anchorCount = cleaned ? (cleaned.match(/^<!-- ¶\d{4} /gm) ?? []).length : 0;
     if (stats.replacementChars > 0) lines.push(`- 提取文本中的替换字符：${stats.replacementChars} 个`);
-    lines.push(`- 提取文本规模：${stats.chars.toLocaleString('en-US')} 字符（汉字 ${stats.cjkChars.toLocaleString('en-US')}），${stats.paragraphs} 段`);
-    if (cleanedStats) lines.push(`- 清洗后 Markdown：${cleanedStats.chars.toLocaleString('en-US')} 字符，${cleanedStats.paragraphs} 段`);
+    lines.push(`- 提取文本：${stats.chars.toLocaleString('en-US')} 字符（汉字 ${stats.cjkChars.toLocaleString('en-US')}）`);
+    lines.push(`- 提取器分块数：${stats.paragraphs}（提取阶段按空行/换行的启发式切分，只表示切分粒度）`);
+    if (cleanedStats) lines.push(`- 清洗后 Markdown：${cleanedStats.chars.toLocaleString('en-US')} 字符`);
+    lines.push(`- 清洗段落锚点数：**${anchorCount}**（Wiki 定位使用的 \`<!-- ¶NNNN -->\` 数目，判断漏页漏段以此为准）`);
+    if (cleanedStats && anchorCount !== stats.paragraphs) {
+      lines.push(
+        `- 说明：提取器分块数（${stats.paragraphs}）与清洗段落锚点数（${anchorCount}）不同属正常：前者是提取阶段的启发式切分，后者按页/行结构重排；两者都不是“页数”。`,
+      );
+    }
     lines.push('');
     lines.push('## 5. 人工目视抽查记录');
     lines.push('');
@@ -933,12 +1047,17 @@ function commandVerify(): void {
     }
   };
   walk(path.join(projectRoot, 'wiki'));
+  // 清洗文本也含相对链接（来源页、原页图），必须一起校验。
+  walk(cleanedDir);
   // 链接目标允许 <...> 形式（文件名含括号时必须使用），因此正则先匹配尖括号整体。
   const markdownLink = /\[[^\]]*\]\(\s*(<[^>]*>|[^)]+)\s*\)/g;
   for (const file of wikiFiles) {
     const content = fs.readFileSync(file, 'utf8');
     const relativeFile = relativeToProject(file);
-    for (const match of content.matchAll(markdownLink)) {
+    // 链接扫描先去掉代码块/行内代码，避免把文档里的示例当成失效链接；
+    // 定位与 source_id 扫描仍用原文（它们本身写在反引号里）。
+    const linkContent = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+    for (const match of linkContent.matchAll(markdownLink)) {
       let target = match[1]!.trim();
       // Markdown allows <...> destinations (needed for file names containing parentheses).
       if (target.startsWith('<') && target.endsWith('>')) target = target.slice(1, -1);
@@ -1039,6 +1158,92 @@ function commandVerify(): void {
     if (missing.length > 0) findings.push({ level: 'fail', scope: source.source_id, message: `manifest 缺字段：${missing.join(', ')}` });
   }
 
+  // 6) 质量状态与产物一致性；含卦图/爻位占位字符的页必须有原页图。
+  for (const source of manifest) {
+    const extractedAbsolute = source.processing.extractedPath ? fromProjectRelative(source.processing.extractedPath) : null;
+    const body =
+      extractedAbsolute && fs.existsSync(extractedAbsolute)
+        ? fs
+            .readFileSync(extractedAbsolute, 'utf8')
+            .split('\n')
+            .filter((line) => !line.startsWith('##'))
+            .join('')
+        : '';
+    const nonWhitespace = body.replace(/\s/g, '').length;
+    const cleanedExists = Boolean(
+      source.processing.cleanedPath && fs.existsSync(fromProjectRelative(source.processing.cleanedPath)),
+    );
+    if (source.processing.status === 'failed' || source.coverage.quality === 'failed') {
+      findings.push({
+        level: cleanedExists ? 'fail' : 'ok',
+        scope: source.source_id,
+        message: cleanedExists
+          ? '状态为 failed 却存在清洗文件（不得生成空白“成功文件”）'
+          : `failed 状态已如实记录且无清洗文件：${source.coverage.issues[0] ?? '（未写原因）'}`,
+      });
+      continue;
+    }
+    findings.push({
+      level: nonWhitespace >= 20 ? 'ok' : 'fail',
+      scope: source.source_id,
+      message:
+        nonWhitespace >= 20
+          ? `提取正文非空（非空白字符 ${nonWhitespace}），状态 ${source.processing.status}/${source.coverage.quality}`
+          : `提取正文过短（非空白字符 ${nonWhitespace}）却标记为 ${source.coverage.quality}`,
+    });
+    if (source.coverage.quality === 'usable' && nonWhitespace < 200) {
+      findings.push({ level: 'warn', scope: source.source_id, message: `质量 usable 但正文仅 ${nonWhitespace} 个非空白字符，请复核` });
+    }
+  }
+
+  for (const source of manifest) {
+    if (!source.processing.cleanedPath) continue;
+    const cleanedText = fs.readFileSync(fromProjectRelative(source.processing.cleanedPath), 'utf8');
+    const sections = cleanedText.split(/^## 第 (\d+) 页/m);
+    for (let index = 1; index < sections.length; index += 2) {
+      const page = Number.parseInt(sections[index]!, 10);
+      const sectionBody = sections[index + 1] ?? '';
+      if (!sectionBody.includes('█')) continue;
+      const hasImage = /!\[[^\]]*\]\(\.\.\/assets\//.test(sectionBody);
+      findings.push({
+        level: hasImage ? 'ok' : 'fail',
+        scope: `${source.source_id} 第 ${page} 页`,
+        message: hasImage ? '含卦图/爻位占位字符，已嵌原页图并在页内标注' : '含卦图/爻位占位字符但未嵌原页图',
+      });
+    }
+  }
+
+  // 7) 原始字节独立命中：不经提取器，直接在原始载体里找抽样段落。
+  for (const source of manifest) {
+    if (!['txt', 'doc', 'docx'].includes(source.format) || !source.processing.cleanedPath) continue;
+    const cleanedText = fs.readFileSync(fromProjectRelative(source.processing.cleanedPath), 'utf8');
+    const paragraphs = cleanedText
+      .split('\n')
+      .filter((line) => line !== '' && !/^(<!--|>|#|!\[)/.test(line));
+    const sample = paragraphs.find((line) => line.replace(/\s/g, '').length >= 14);
+    if (!sample) {
+      findings.push({ level: 'warn', scope: source.source_id, message: '找不到可用于原始字节核对的抽样段落' });
+      continue;
+    }
+    const needle = sample.replace(/\s/g, '').slice(0, 10);
+    const raw = fs.readFileSync(fromProjectRelative(source.originalRelativePath));
+    let carrier = '';
+    if (source.format === 'txt') carrier = new TextDecoder('gb18030', { fatal: false }).decode(raw);
+    else if (source.format === 'doc') carrier = new TextDecoder('utf-16le', { fatal: false }).decode(raw);
+    else {
+      const documentEntry = readZip(raw).find((entry) => entry.name === 'word/document.xml');
+      carrier = documentEntry ? documentEntry.content.toString('utf8') : '';
+    }
+    const hit = carrier.replace(/\s/g, '').includes(needle);
+    findings.push({
+      level: hit ? 'ok' : 'fail',
+      scope: source.source_id,
+      message: hit
+        ? `原始载体独立命中抽样段落（“${needle}”，来源=${source.format === 'docx' ? 'word/document.xml' : source.format === 'doc' ? 'UTF-16LE 原始字节' : 'GB18030 原始字节'}）`
+        : `原始载体中未找到抽样段落“${needle}”，自实现解析结果需复核`,
+    });
+  }
+
   const ok = findings.filter((item) => item.level === 'ok').length;
   const warn = findings.filter((item) => item.level === 'warn').length;
   const fail = findings.filter((item) => item.level === 'fail').length;
@@ -1051,6 +1256,93 @@ function commandVerify(): void {
   }
   console.log(`  通过 ${ok} 项；警告 ${warn} 项；失败 ${fail} 项`);
   if (fail > 0) process.exitCode = 1;
+}
+
+/* ------------------------------------------------------------------ pack */
+
+/**
+ * 生成可校验的资料交接包（ZIP）：显式包含原件、提取/清洗文本、图片、质量报告、manifest、
+ * Wiki、工具与第二阶段文档，并在包内写入 SHA-256 清单。
+ * 使用固定时间戳，因此相同输入重复打包会得到字节一致的归档，便于按 SHA-256 复核。
+ */
+function commandPack(options: Map<string, string[]>): void {
+  const outRelative = options.get('out')?.[0] ?? `dist/liuyao-phase2-corpus-${isoTimestampCompact().slice(0, 8)}.zip`;
+  const absoluteOut = fromProjectRelative(outRelative);
+  ensureDir(path.dirname(absoluteOut));
+
+  const includes = [
+    'corpus',
+    'wiki',
+    'tools',
+    'README.md',
+    'docs/phase2_development_spec.md',
+    'docs/phase2_delivery.md',
+    'docs/phase2_acceptance_2026-10-02.md',
+  ];
+  const collected: Array<{ name: string; data: Buffer }> = [];
+  const addFile = (absolutePath: string): void => {
+    const relative = relativeToProject(absolutePath);
+    if (relative.startsWith('dist/') || relative === 'docs/phase2_pack_inventory.md') return;
+    collected.push({ name: relative, data: fs.readFileSync(absolutePath) });
+  };
+  const walkPath = (absolutePath: string): void => {
+    if (!fs.existsSync(absolutePath)) return;
+    if (fs.statSync(absolutePath).isFile()) {
+      addFile(absolutePath);
+      return;
+    }
+    for (const entry of fs.readdirSync(absolutePath, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      walkPath(path.join(absolutePath, entry.name));
+    }
+  };
+  for (const item of includes) walkPath(fromProjectRelative(item));
+  collected.sort((a, b) => a.name.localeCompare(b.name));
+
+  const inventoryLines = collected.map(
+    (file) => `${sha256File(fromProjectRelative(file.name))}  ${String(file.data.length).padStart(9, ' ')}  ${file.name}`,
+  );
+  const packManifest = [
+    '# 资料交接包清单（PACK-MANIFEST.txt）',
+    '# 说明：本清单不含生成时间，以保证相同输入重复打包得到字节一致的归档（可用 SHA-256 复核）。',
+    '# 生成命令：node tools/corpus-cli.ts pack [--out <zip>]',
+    `# 文件数：${collected.length}`,
+    `# 字节合计：${collected.reduce((sum, file) => sum + file.data.length, 0)}`,
+    '# 格式：sha256  字节  项目内相对路径',
+    ...inventoryLines,
+    '',
+  ].join('\n');
+
+  const zipBuffer = createZip([{ name: 'PACK-MANIFEST.txt', data: Buffer.from(packManifest, 'utf8') }, ...collected]);
+  fs.writeFileSync(absoluteOut, zipBuffer);
+  const zipSha = sha256File(absoluteOut);
+
+  const inventoryDoc = [
+    '# 第二阶段资料交接包清单',
+    '',
+    `- 归档：\`${outRelative}\``,
+    `- 归档 SHA-256：\`${zipSha}\``,
+    `- 归档字节数：${zipBuffer.length.toLocaleString('en-US')}`,
+    `- 内含文件：${collected.length + 1}（含包内 \`PACK-MANIFEST.txt\`）`,
+    `- 生成命令：\`node tools/corpus-cli.ts pack --out ${outRelative}\``,
+    '- 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核',
+    '',
+    '## 归档内容（不含包内清单自身）',
+    '',
+    '```text',
+    ...inventoryLines,
+    '```',
+    '',
+    '> `corpus/originals/` 因体积与第三方版权原因不进入 Git，但**必须**通过本归档交付；' +
+      '归档内的 `PACK-MANIFEST.txt` 与本文件互为核对依据。',
+    '',
+  ].join('\n');
+  writeText(fromProjectRelative('docs/phase2_pack_inventory.md'), inventoryDoc);
+
+  console.log(`交接包：${outRelative}`);
+  console.log(`  SHA-256：${zipSha}`);
+  console.log(`  文件数：${collected.length + 1}；字节：${zipBuffer.length.toLocaleString('en-US')}`);
+  console.log('  清单：docs/phase2_pack_inventory.md');
 }
 
 /* ------------------------------------------------------------------ status */
@@ -1082,6 +1374,7 @@ const commands: Record<string, () => void> = {
   assets: () => commandAssets(options),
   clean: () => commandClean(options),
   report: () => commandReport(options),
+  pack: () => commandPack(options),
   verify: commandVerify,
   status: commandStatus,
 };

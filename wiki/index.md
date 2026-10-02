@@ -19,7 +19,7 @@
 | [src-25fcddea758b](sources/src-25fcddea758b.md) | TXT | 全文（146 段） | `usable` | 自述摘自邵伟华/邵伟中讲义 |
 | [src-3f8243c07930](sources/src-3f8243c07930.md) | 旧 DOC | 全文（285 段） | `usable` | 自实现 OLE2 解析；含线上排盘残留 |
 | [src-946795472cd6](sources/src-946795472cd6.md) | DOCX | 全文（122 段） | `usable` | 文件内无图片、无表格 |
-| [src-e6fc8612e955](sources/src-e6fc8612e955.md) | 文字层 PDF | 整本 23 页 | `usable` | 文字层为 OCR 产物，干支须核对原页；已附第 1–2 页原页图 |
+| [src-e6fc8612e955](sources/src-e6fc8612e955.md) | 文字层 PDF | 整本 23 页 | `needs_review` | 文字层为 OCR 产物且 20/23 页含 `██` 爻位占位；已附**全部 23 页**原页图并在页内标注，卦例不作默认规则 |
 | [src-f3f838d501b1](sources/src-f3f838d501b1.md) | 扫描 PDF（OCR） | 第 1–5 页（整本） | `needs_review` | Windows 内建离线 OCR；未逐字校对；已附 5 页原页图 |
 
 ## 当前覆盖与边界

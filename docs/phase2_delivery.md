@@ -156,3 +156,21 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 | 页面图以 JPEG 入包 | 原生渲染 PNG 每页约 5 MB（5 页≈27 MB），改为宽 ≤1400、质量 82 的 JPEG（每页约 0.3–0.4 MB）；原件完整渲染留在 `storage/work/` 不入包 |
 | 段落锚点用 HTML 注释 | 不干扰 Markdown 渲染，可被 `verify` 机械检查；PDF 同时给出实际页码标题 |
 | 质量状态从严 | 只要存在影响释义的 OCR/归属/版式疑点就标 `needs_review`；`usable` 只表示"在声明范围内定位可靠"，不表示预测有效 |
+
+## 12. 第二阶段独立验收记录阻断项修复（2026-10-02）
+
+独立验收（[phase2_acceptance_2026-10-02.md](phase2_acceptance_2026-10-02.md)）判定"暂不通过"，列出 5 个 P1 与 4 项内容问题。逐项修复与复验证据如下。
+
+| 项 | 修复 | 复验证据 |
+| --- | --- | --- |
+| P1-1 清洗文本来源链接失效 6/6 | 生成路径改为 `../../wiki/sources/<source_id>.md`；`verify` 的链接检查范围扩展到 `corpus/cleaned/`（先剔除代码块与行内代码，避免把文档示例当链接） | 见 `verify` 输出：`corpus/cleaned/*.md` 的相对链接全部通过 |
+| P1-2 卦图/图文状态不符 | 文字层 PDF 生成**全部 23 页**原页图并随包；清洗文本按页嵌入 `![第 N 页原页图](../assets/...)`；含 `██` 的 **20 页**在页内标注"本页卦例不作为默认规则"；该来源质量由 `usable` 降为 `needs_review`（来源页、索引、概念页同步）；扫描件 5 页图同样按页嵌入 | `verify --verbose` 中 20 条 `含卦图/爻位占位字符，已嵌原页图并在页内标注` 全部通过；无原页图时该检查判 `fail` |
+| P1-3 同哈希别名丢失 | `import` 在循环内实时更新哈希索引；同哈希的后续路径一律并入 `aliasSourcePaths`，主路径固定为首次导入路径；别名不再重复复制原件（哈希相同） | 隔离复验脚本 `tools/offline/accept-isolation-test.mjs`：同批（a→b）、分批（b 再来）、反向分批（a 先 b 后）**3/3 通过**，均为 `主路径=copy-a.txt 别名=["copy-b.txt"]` |
+| P1-4 空提取误判 usable | 提取正文非空白字符 < 20 → `processing.status=failed`、`coverage.quality=failed`，写入原因与重试指引；`clean` 拒绝为 `failed` 来源生成清洗文件；`verify` 新增"状态与产物一致性"检查 | 隔离复验：零字节文件得到 `failed/failed`、无清洗文件、原因已记录（**1/1 通过**）；`verify` 对 6 个来源的正文非空检查全部通过 |
+| P1-5 交接包不自包含 | 新增 `node tools/corpus-cli.ts pack [--out <zip>]`：零依赖 ZIP 写入器、固定时间戳（输入不变则归档字节一致）、包内 `PACK-MANIFEST.txt` 列出每个文件的 SHA-256 与字节数；同时生成 [phase2_pack_inventory.md](phase2_pack_inventory.md)；`.gitignore` 改为只排除 `corpus/originals/`（体积与第三方版权）与 `storage/`、`dist/` | 归档 `dist/liuyao-phase2-corpus-20261002.zip`：92 个文件、8,677,232 字节，SHA-256 见清单文件；manifest、extracted、cleaned、assets、reports 现已随仓库交付 |
+| 内容问题 1：DOC 分片数自相矛盾 | 来源页改为"分片表 31 片"（与 manifest/report 一致） | 见 `wiki/sources/src-3f8243c07930.md` 与 `corpus/reports/spotcheck/src-3f8243c07930.json` |
+| 内容问题 2：对照页夸大冲突 | 标题与状态改为"表面分歧、前提不同"，并明确两份来源关注**不同环节** | 见 `wiki/comparisons/meihua-vs-liuyao.md` |
+| 内容问题 3：段落统计口径混淆 | 报告与 manifest 统一为"提取器分块数"与"清洗段落锚点数"两个字段，并说明差异原因；锚点数以清洗文件中的 `<!-- ¶NNNN -->` 计数为准 | 见各 `corpus/reports/src-*.md` 第 4 节 |
+| 内容问题 4：旧 DOC 核对表述过强 | 抽查记录改为"与自实现解析器输出一致 + 原件原始字节独立命中"，并声明**未做**第二种解析器/渲染器对照 | `verify` 新增"原始载体独立命中"检查（txt=GB18030 原始字节、doc=UTF-16LE 原始字节、docx=`word/document.xml`），当前 4/4 命中 |
+
+修复后的校验结果：`node tools/corpus-cli.ts verify --verbose` → **通过 82 项、警告 0、失败 0**（较修复前新增：清洗文本链接、卦图页图、正文非空、状态一致性、原始载体命中）。隔离复验共 4 个场景全部通过。
