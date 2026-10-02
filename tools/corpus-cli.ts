@@ -1223,8 +1223,10 @@ function commandVerify(): void {
     }
   }
 
-  // 7) 卦盘结构化转写：必须写明 source_id 且原页图链接有效。
-  for (const file of wikiFiles.filter((item) => relativeToProject(item).startsWith('corpus/figures/'))) {
+  // 7) 卦盘结构化转写：必须写明 source_id 且原页图链接有效（README 是索引，不适用此规则）。
+  for (const file of wikiFiles.filter(
+    (item) => relativeToProject(item).startsWith('corpus/figures/') && path.basename(item) !== 'README.md',
+  )) {
     const relativeFile = relativeToProject(file);
     const content = fs.readFileSync(file, 'utf8');
     const hasSource = /`src-[0-9a-f]{12,}`/.test(content);
