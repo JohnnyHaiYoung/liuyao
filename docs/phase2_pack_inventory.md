@@ -1,9 +1,9 @@
 # 第二阶段资料交接包清单
 
 - 归档：`dist/liuyao-phase2-corpus-20261004.zip`
-- 归档 SHA-256：`cdc70d5bfc7802818e2a70c53e4121a0c9b94f7044f0387abd9c1d43baee5b35`
-- 归档字节数：8,744,073
-- 内含文件：119（含包内 `PACK-MANIFEST.txt`）
+- 归档 SHA-256：`026b84a5e20a144800ed3c2aa13f872226851e49e65d0ecafb519927dbd18504`
+- 归档字节数：8,748,956
+- 内含文件：121（含包内 `PACK-MANIFEST.txt`）
 - 生成命令：`node tools/corpus-cli.ts pack --out dist/liuyao-phase2-corpus-20261004.zip`
 - 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核
 
@@ -44,7 +44,7 @@ b41854051e6a5e10731f79cce34a2fabd183e9d92d63ddfad08ee1253da6cb61       1092  cor
 f36d52d20f1c215536bd48c90cbbe8cd9c0961ae3921fd8505399433b4a11657     140901  corpus/cleaned/src-25fcddea758b.md
 3612e7b39b733d4f17eb2f4520cfb0334da0d61c36a2515f2f8c8e51e1b56eb7     122850  corpus/cleaned/src-3f8243c07930.md
 fbc5079e6e58db1aa604071ad7e5e384b3317570abc9662e61cb812adfe38fcd      12916  corpus/cleaned/src-946795472cd6.md
-35c17513f0714b059dae0e5a96b434abd860917059b9cc257caa01f88aeb693b     114541  corpus/cleaned/src-e6fc8612e955.md
+5149f5233769840f7ef605c2ccc5f9a0079806177f62e8c969c16127072bcbdd     114781  corpus/cleaned/src-e6fc8612e955.md
 a3e8fc524e08a77e5acfe080276821c4571d708d02a430a5549fc5a31b99181f      20070  corpus/cleaned/src-f3f838d501b1.md
 cf1f4c7844f71d7486fd5534d1d982b72a1130599135460d4757c9aa32f869ee        224  corpus/extracted/README.md
 278457125f822937563a67ef9660ba9ac5b8e82e6c54b4c4d7d4334d9ff562c3       5264  corpus/extracted/src-08862b06aea9.txt
@@ -68,8 +68,10 @@ a9b24b02d8fe1e15418d9ce2a188818867ce817ae955572d482a3f4fc0c76ebe       3368  cor
 ab2e88914a2f6da62f7ad834aeb6fb908888238eb484fd84a177a4cd18e78189       3632  corpus/figures/src-e6fc8612e955/page-015.md
 aa4a883ddeea991efbcb0f53f548e470159a43c3bdad7dd33894091e322ef101       4081  corpus/figures/src-e6fc8612e955/page-016.md
 97a525fddf27cf53d9239eb3bd6b830f70fa678f4712438ea5c1ad3ead5db9f3       3928  corpus/figures/src-e6fc8612e955/page-017.md
+fd8ab4bd3e2165679bd55ab56d5ffebd666279bcd48f474104ce464d0b18610a       4562  corpus/figures/src-e6fc8612e955/page-018.md
+1cac5da4f1fcdd4a4dfe6fe6e93fe2e4aa6693668686a146c4964e412803316d       3915  corpus/figures/src-e6fc8612e955/page-019.md
 04290b7c966c60b5fc3ea335c097b7842140b8837e5b8a7e01a44617b367598f       2197  corpus/figures/src-e6fc8612e955/page-020.md
-f3b1937b40a0365a5021d7cfa474061d48719ec4ebc55c4046d3e5aa5397c79d       3398  corpus/figures/src-e6fc8612e955/README.md
+544bac9e227eed9ea1becd5dfe8e6e0b99c4277ab0b0ed6f7688e730296a861d       3725  corpus/figures/src-e6fc8612e955/README.md
 72d13b269ed62bfab9e32b015c40b53ce291de3585d176d7ce4c613f87551f41      11811  corpus/manifest.jsonl
 25fcddea758b089bdf32a057da5ddc86d06e28180d9b17a59178ea049341d582     100448  corpus/originals/《周易预测学》讲义..txt
 3f8243c079303e832fc6e85b9377deb96fb6c8e203b4a6b66a5a49aa5f72cf47     379904  corpus/originals/六爻用神答疑（51页）王虎应.top.doc
