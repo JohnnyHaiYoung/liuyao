@@ -222,3 +222,13 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 | 3. 复验脚本会改写正式资料、可能删除同名原件 | `accept-invalid-batch-test.mjs` 直接向 `corpus/originals/` 写入测试文件并删除、并覆盖正式 `manifest.jsonl`（虽先备份） | 两个隔离脚本重写为：把 `tools/` **复制**到 `storage/tmp/<name>-root/` 作为一次性项目根，导入/提取/清洗全部发生在副本内；脚本内含守卫（拒绝在正式项目根运行、必须位于 `storage/tmp` 下），结束后整棵临时根删除。正式 `corpus/`、原件、`manifest.jsonl` 全程只读 | 运行前后正式资料指纹一致：`corpus/manifest.jsonl` SHA-256 均为 `72D13B26…`，`corpus/originals/` 7 个文件的合计指纹均为 `5ED148A7…`；别名复验 **3/3**、混合批次复验 **4/4** 通过；临时项目根已自动清理（`Test-Path` 为 False） |
 
 **教训**：上一轮我把"命令没输出"当成了"命令成功"，没有检查退出码，于是把一项失败掩盖成了"已修复"。本轮起，凡生成产物的命令都以退出码为准；`pack` 之后固定解包复核。
+
+### 16.1 复验门槛中另行要求的可移植性与自检补强
+
+复验报告的第 3 条门槛与建议还包含两点，已一并落实：
+
+| 要求 | 落实 |
+| --- | --- |
+| 脚本"从任意部署目录运行时使用被测目录，而不是硬编码本机路径" | 三个交付形态脚本（`accept-isolation-test.mjs`、`accept-invalid-batch-test.mjs`、`accept-unpack-test.mjs`）均改为由 `import.meta.url` 推导项目根（`<root>/tools/offline/*.mjs` → `<root>`）；已用文本检查确认三者都不再含本机盘符路径，并从**非项目目录**作为工作目录运行验证 |
+| `accept-unpack-test.mjs` 不应硬编码根目录、也不应按名字猜归档 | 改为**必须显式传入归档路径**（`node tools/offline/accept-unpack-test.mjs <归档.zip> [解包目录]`，缺参数时报用法并退出码 2）；解包目录必须是项目 `storage/tmp` 下的路径，否则拒绝执行；新增**包内 `PACK-MANIFEST.txt` 逐文件哈希核对**，并把期望的 F 盘警告条数按包内来源数计算而非写死 |
+| 建议让 `verify` 检查抽查 JSON 能否解析（此前 102 项自检未覆盖，才让坏 JSON 蒙混过关） | `verify` 新增第 9 类检查：逐份 `corpus/reports/spotcheck/*.json` 必须可解析并报告抽查条数；当前 **6/6 可解析**，检查项总数由 102 增至 **108** |

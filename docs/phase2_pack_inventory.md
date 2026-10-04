@@ -1,8 +1,8 @@
 # 第二阶段资料交接包清单
 
 - 归档：`dist/liuyao-phase2-corpus-20261004.zip`
-- 归档 SHA-256：`139912059607acc04cea8996eff0e5161e9a6dd1f2f8ad40cbf8acd7052f5c45`
-- 归档字节数：8,761,241
+- 归档 SHA-256：`7216967d33e6645003976c6e344af3074f2b64fb51657550bf12d7776010e037`
+- 归档字节数：8,763,376
 - 内含文件：125（含包内 `PACK-MANIFEST.txt`）
 - 生成命令：`node tools/corpus-cli.ts pack --out dist/liuyao-phase2-corpus-20261004.zip`
 - 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核
@@ -100,18 +100,18 @@ f914605f9591495a8885c03ef760050393178a33436b3f4a9a896f8826e37f0a       4616  cor
 22ce3a8d8612b198672f4483525070a4bfcda42837a0e4ae1b983c38f5c983ef       8238  corpus/reports/src-e6fc8612e955.md
 69888e3753f84297e7b76f31fd2b70d088276c6c3dcee29920c7d8a875354842       5375  corpus/reports/src-f3f838d501b1.md
 645d957f4488c3c3f23a4c8f7ce3f195061b59532ea106a19c2fe00511df3cf5       7918  docs/phase2_acceptance_2026-10-02.md
-bb302d7b8dfabfa5db62c0183a0faa016530934593eb702966b5bcefe1f58f36      30727  docs/phase2_delivery.md
+61e80e66450bd5d83430142e41544d58099e1feeb65c7eab5628f67f253c51cd      32088  docs/phase2_delivery.md
 15ab8e194120f073ce74c3ff69e8ce48bb5dad59807e0099a4ab1524536a22f7      12921  docs/phase2_development_spec.md
 b4956a9e511c5de453e5ac1275219d181d39898f24dfec6e3a7ecfcf18890f81       3431  README.md
 f5e6a6ce68633ae1eb305ee2fee46daf0f0ece5fd993899df17af07844def9d7       6623  tools/build_source_inventory.py
-ce319ad1581916a1dceb4f54ef6103f14040ea53969a5b26c7dc10b35c605848      67690  tools/corpus-cli.ts
+25a3cd8e9ff442d000d42fb7511ea2620d20a8c09abeeb8d655848e5a5251e13      68759  tools/corpus-cli.ts
 d8897397e42e5b46b2de54b136015ea0c919ba898418a65bce43e9f372945711      10278  tools/lib/common.ts
 8bd69f967e29d862080a4cb72fedee1e2b1c97155621a8897070098bf10877ef      16245  tools/lib/office.ts
 a35f3ca85bbc38971d103f9a352121a3df083fd56d2253d49064b9f709960f78      21739  tools/lib/pdf.ts
 3f8faf0713536d63b3ee8cfeda114ceadae89a7874ad202db2c815d119587906       2926  tools/lib/zip.ts
-2468e9e0194d0057e52a218536c3267116d8efc861e568698b3bad07d27a962c       5328  tools/offline/accept-invalid-batch-test.mjs
-d6ee3d8b46deaf1ebbe9bf2c822539acb66963df6fd6c4850f73d4d7ae4a768f       4892  tools/offline/accept-isolation-test.mjs
-e10d598575f630cb2ff76f3fe356de56ab834aa84e7160ada56079e3171eef8b       2517  tools/offline/accept-unpack-test.mjs
+597a33ba44a6bac5cf1fb6cf166a6e80a9b9ab51afe067ad82302de046e4a1c8       5625  tools/offline/accept-invalid-batch-test.mjs
+bacfc5a03cc0b81e45279f928bf1abc3de1728e19e3a2d9e7f8d603b06c88c18       5099  tools/offline/accept-isolation-test.mjs
+c5111a3d386898d1eac9a7209af0cfac3fec9a4e904655be55177d6679a70210       4852  tools/offline/accept-unpack-test.mjs
 8bd5327d320aee4e4e80d3fb974126843d3e91fb8dc96bd346958e25ed29dd05       7652  tools/offline/doc-crosscheck.mjs
 8507c54bb16db937eff0748ad58d9fc52829b83eaf5197d016d36b141cbd3600       1763  tools/offline/docx-capacity-check.mjs
 259ea5ac1741d3af3fa1e064cac07ebd3403abcb97c3932d5814ad6686c8b8ca       6742  tools/offline/ifilter-crosscheck.mjs

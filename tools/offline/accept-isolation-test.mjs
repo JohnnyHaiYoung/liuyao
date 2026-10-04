@@ -5,9 +5,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const repo = 'E:\\workspace-ai\\xuanxue\\liuyao';
+// 项目位置从脚本自身路径推导（<root>/tools/offline/*.mjs），不硬编码任何本机路径。
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repo = path.resolve(here, '..', '..');
 const tempRootsRoot = path.join(repo, 'storage', 'tmp');
 const workRoot = path.join(tempRootsRoot, 'accept-isolation-root');
 const sandbox = path.join(workRoot, 'sources');

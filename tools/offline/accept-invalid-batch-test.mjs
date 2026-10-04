@@ -6,9 +6,13 @@
 // 项目根随删，因此也不存在"删除同名原件"的风险。
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const repo = 'E:\\workspace-ai\\xuanxue\\liuyao';
+// 项目位置从脚本自身路径推导（<root>/tools/offline/*.mjs），不硬编码任何本机路径，
+// 因此把资料包部署到任意目录后仍指向"被测目录"而不是开发机。
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repo = path.resolve(here, '..', '..');
 const tempRootsRoot = path.join(repo, 'storage', 'tmp');
 const workRoot = path.join(tempRootsRoot, 'accept-invalid-batch-root');
 const sandbox = path.join(workRoot, 'sources');

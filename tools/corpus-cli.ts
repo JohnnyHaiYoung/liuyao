@@ -1302,6 +1302,29 @@ function commandVerify(): void {
     });
   }
 
+  // 9) 抽查记录 JSON 必须可解析：2026-10-04 二次复验中，一份 spotcheck JSON 因未转义引号而无法解析，
+  //    导致 report 生成失败却没被自检发现（当时的 102 项检查不覆盖这一点）。
+  const spotcheckDir = path.join(reportsDir, 'spotcheck');
+  if (fs.existsSync(spotcheckDir)) {
+    for (const file of fs.readdirSync(spotcheckDir).filter((name) => name.endsWith('.json'))) {
+      const full = path.join(spotcheckDir, file);
+      try {
+        const parsed = JSON.parse(fs.readFileSync(full, 'utf8')) as { spotChecks?: unknown[] };
+        findings.push({
+          level: 'ok',
+          scope: relativeToProject(full),
+          message: `抽查 JSON 可解析（抽查 ${Array.isArray(parsed.spotChecks) ? parsed.spotChecks.length : 0} 条）`,
+        });
+      } catch (error) {
+        findings.push({
+          level: 'fail',
+          scope: relativeToProject(full),
+          message: `抽查 JSON 无法解析：${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    }
+  }
+
   const ok = findings.filter((item) => item.level === 'ok').length;
   const warn = findings.filter((item) => item.level === 'warn').length;
   const fail = findings.filter((item) => item.level === 'fail').length;
