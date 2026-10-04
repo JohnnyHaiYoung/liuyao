@@ -6,7 +6,10 @@
  *   - 月建按节气交接时刻（getMonthInGanZhiExact），日界显式映射（zi23→Exact / midnight→Exact2）；
  *   - 时区白名单：首版仅 Asia/Shanghai，其它时区明确拒绝；
  *   - 自行做严格公历校验（上游对 2026-02-30 会静默溢出）；
- *   - 支持范围 1901-01-01 至 2099-12-31（保守声明）。
+ *   - 支持范围 1901-01-01 至 2099-12-31（保守声明）；
+ *   - 节气窗口按**交接时刻**判断（getPrevJieQi(false)/getNextJieQi(false)），并输出当地交接时间；
+ *   - 年柱分列：`yearGanzhi` 为农历年（lunar-typescript 默认），`yearGanzhiByLiChun` 为立春换年
+ *     （getYearInGanZhiExact）；两者不是同一四柱体系，字段名不得混用（验收报告 P1-4 与证据项 2）。
  */
 import { Solar } from 'lunar-typescript';
 
@@ -25,23 +28,52 @@ export class PaipanError extends Error {
 export const SUPPORTED_TIMEZONES = ['Asia/Shanghai'];
 export const SUPPORTED_RANGE = { from: '1901-01-01', to: '2099-12-31' };
 
+const STEMS = '甲乙丙丁戊己庚辛壬癸';
+const BRANCHES = '子丑寅卯辰巳午未申酉戌亥';
+
+/** 六十甲子：干阳配阳支、阴配阴支（干支索引同奇偶）。 */
+export function isSexagenary(ganzhi: string): boolean {
+  if (typeof ganzhi !== 'string' || ganzhi.length !== 2) return false;
+  const stem = STEMS.indexOf(ganzhi[0]!);
+  const branch = BRANCHES.indexOf(ganzhi[1]!);
+  if (stem < 0 || branch < 0) return false;
+  return (stem - branch) % 2 === 0;
+}
+
+export function sexagenaryCycle(): string[] {
+  const list: string[] = [];
+  for (let index = 0; index < 60; index += 1) list.push(`${STEMS[index % 10]}${BRANCHES[index % 12]}`);
+  return list;
+}
+
+export interface SolarTermWindow {
+  previous: string;
+  next: string;
+  /** 当地交接时间（形如 2026-08-07 19:42:43），按时刻判断，供核对 */
+  previousAt?: string;
+  nextAt?: string;
+}
+
 export interface CalendarContext {
   mode: CalendarMode;
+  source: string;
   dayGanzhi: string;
   monthBranch: string;
   monthGanzhi?: string;
+  /** 农历年柱（lunar-typescript 默认口径） */
   yearGanzhi?: string;
+  /** 立春换年口径的年柱；与 yearGanzhi 不是同一体系，分别命名 */
+  yearGanzhiByLiChun?: string;
   hourGanzhi?: string;
   timezone?: string;
   dayBoundary?: DayBoundary;
   localCivilTime?: string;
-  solarTermWindow?: { previous: string; next: string };
+  solarTermWindow?: SolarTermWindow;
   library: string;
   evidence: string;
 }
 
 export interface AutoCalendarInput {
-  /** 当地民用时间，形如 2026-09-06T20:00:00（不带时区偏移，按 timezone 解释） */
   castAt: string;
   timezone: string;
   dayBoundary?: DayBoundary;
@@ -49,7 +81,7 @@ export interface AutoCalendarInput {
 
 /** 严格公历校验：拒绝 2026-02-30 这类上游会静默溢出的输入。 */
 export function parseStrictLocalTime(castAt: string): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(castAt.trim());
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(castAt).trim());
   if (!match) throw new PaipanError('invalid_datetime', `时间格式应为 YYYY-MM-DDTHH:mm[:ss]，收到：${castAt}`);
   const [year, month, day, hour, minute] = [match[1], match[2], match[3], match[4], match[5]].map((value) => Number.parseInt(value!, 10));
   const second = match[6] ? Number.parseInt(match[6], 10) : 0;
@@ -63,7 +95,6 @@ export function parseStrictLocalTime(castAt: string): { year: number; month: num
   return { year: year!, month: month!, day: day!, hour: hour!, minute: minute!, second };
 }
 
-/** 时区校验：白名单 + Node 原生 Intl（full ICU）验证。 */
 export function assertTimezone(timezone: string): void {
   if (!SUPPORTED_TIMEZONES.includes(timezone)) {
     throw new PaipanError(
@@ -85,26 +116,41 @@ function assertInRange(year: number, month: number, day: number): void {
   }
 }
 
-/** 自动历法路径：由时刻计算日柱/月建（含节气窗口），需要时区与日界。 */
+const formatLocal = (solar: { getYear(): number; getMonth(): number; getDay(): number; getHour(): number; getMinute(): number; getSecond(): number }): string =>
+  `${String(solar.getYear()).padStart(4, '0')}-${String(solar.getMonth()).padStart(2, '0')}-${String(solar.getDay()).padStart(2, '0')} ` +
+  `${String(solar.getHour()).padStart(2, '0')}:${String(solar.getMinute()).padStart(2, '0')}:${String(solar.getSecond()).padStart(2, '0')}`;
+
+/** 自动历法路径：由时刻计算日柱/月建（含按时刻的节气窗口），需要时区与日界。 */
 export function fromMoment(input: AutoCalendarInput): CalendarContext {
   assertTimezone(input.timezone);
   const dayBoundary: DayBoundary = input.dayBoundary ?? 'zi23';
   const { year, month, day, hour, minute, second } = parseStrictLocalTime(input.castAt);
   assertInRange(year, month, day);
-  const lunar = Solar.fromYmdHms(year, month, day, hour, minute, second).getLunar();
+  const solar = Solar.fromYmdHms(year, month, day, hour, minute, second);
+  const lunar = solar.getLunar();
   const dayGanzhi = dayBoundary === 'zi23' ? lunar.getDayInGanZhiExact() : lunar.getDayInGanZhiExact2();
   const monthGanzhi = lunar.getMonthInGanZhiExact();
+  // 按时刻判断前后节气（false = 精确到交接时刻；true 为按天，会提前跳转）
+  const prevJie = lunar.getPrevJieQi(false);
+  const nextJie = lunar.getNextJieQi(false);
   return {
     mode: 'auto_calendar',
+    source: 'command_line:--at/--timezone/--day-boundary',
     dayGanzhi,
     monthBranch: monthGanzhi.slice(-1),
     monthGanzhi,
     yearGanzhi: lunar.getYearInGanZhi(),
+    yearGanzhiByLiChun: lunar.getYearInGanZhiExact(),
     hourGanzhi: lunar.getTimeInGanZhi(),
     timezone: input.timezone,
     dayBoundary,
-    localCivilTime: `${input.castAt}`,
-    solarTermWindow: { previous: lunar.getPrevJieQi(true).getName(), next: lunar.getNextJieQi(true).getName() },
+    localCivilTime: input.castAt,
+    solarTermWindow: {
+      previous: prevJie.getName(),
+      next: nextJie.getName(),
+      previousAt: formatLocal(prevJie.getSolar()),
+      nextAt: formatLocal(nextJie.getSolar()),
+    },
     library: 'lunar-typescript@1.8.6',
     evidence: 'corpus_original_page + independent_implementation（见 docs/phase3_calendar_decision.md §3）',
   };
@@ -112,18 +158,21 @@ export function fromMoment(input: AutoCalendarInput): CalendarContext {
 
 /** 手动历法路径：使用外部已核实的日柱/月建，不冒充自动计算。 */
 export function fromManual(dayGanzhi: string, monthBranch: string): CalendarContext {
-  const branches = '子丑寅卯辰巳午未申酉戌亥';
-  if (!/^[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]$/.test(dayGanzhi)) {
-    throw new PaipanError('invalid_day_ganzhi', `日柱应为干支两字（如 戊辰），收到：${dayGanzhi}`);
+  if (!isSexagenary(String(dayGanzhi))) {
+    throw new PaipanError(
+      'invalid_day_ganzhi',
+      `日柱必须是六十甲子之一（如 戊辰）；收到「${dayGanzhi}」。注意阳干只配阳支、阴干只配阴支（甲丑、乙子等不存在）。`,
+    );
   }
-  if (monthBranch.length !== 1 || !branches.includes(monthBranch)) {
+  if (typeof monthBranch !== 'string' || monthBranch.length !== 1 || !BRANCHES.includes(monthBranch)) {
     throw new PaipanError('invalid_month_branch', `月建应为地支单字（如 申），收到：${monthBranch}`);
   }
   return {
     mode: 'manual_calendar',
+    source: 'command_line:--day/--month（外部提供的已知日柱与月建）',
     dayGanzhi,
     monthBranch,
     library: 'externally_supplied',
-    evidence: '调用方声明的已知日柱/月建；本模块不校验其历法来源',
+    evidence: '调用方声明的已知日柱/月建；本模块只校验其为合法六十甲子与地支，不校验其历法来源',
   };
 }

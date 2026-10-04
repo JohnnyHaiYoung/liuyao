@@ -25,6 +25,8 @@ export const CORE_VERSION = 'paipan-core/0.1.0';
 
 export interface BuildOptions {
   questionCategory?: string;
+  /** 原始爻值字符串（调用方传入，原样回显以便追溯；见验收报告 P1-1） */
+  rawLineValues?: string[];
   /** 审计元数据；不参与盘面等价比较 */
   generatedAt?: string;
 }
@@ -197,6 +199,7 @@ export function buildChart(lineValues: number[], calendar: CalendarContext | nul
     coreVersion: CORE_VERSION,
     input: {
       lineValues: [...lineValues],
+      rawLineValues: options.rawLineValues ?? lineValues.map((value) => String(value)),
       order: 'bottom_up',
       orderNote: '索引 0 = 初爻；显示可自上而下，但原始输入与计算不得倒序',
       movingPositions,

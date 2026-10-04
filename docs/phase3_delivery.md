@@ -58,23 +58,30 @@
 ## 5. 启动与复跑
 
 ```bash
-# 依赖（按 lockfile 重装；node_modules 不入库）
-cd paipan && node <npm-cli> install          # 或 npm install
+# ── 运行环境 ──
+# Node ≥ 22.18.0（本模块直接交付 TypeScript，依赖 Node 内建类型剥离；v22.6.0 引入、v22.18.0 起默认开启）。
+# 若使用 22.6.0–22.17.x，需显式加 --experimental-strip-types；低于 22.6.0 请改用编译后的 JS（本版未提供）。
 
-# 排盘（手动历法模式，不需要 Python、不需要网络）
-node paipan/bin/paipan.ts --lines 8 7 8 8 8 7 --day 戊辰 --month 申
-node paipan/bin/paipan.ts --lines 6 7 8 9 7 8 --canonical       # 缺历法 → 六神/旬空为 null 并附原因
+# ── 安装（按锁文件；生产只需要 lunar-typescript） ──
+cd paipan
+npm ci --omit=dev        # 生产依赖：仅 lunar-typescript@1.8.6（零传递依赖）
+npm ci                   # 若要跑开发期对照脚本（names-check / calendar-probe），需连同 devDependencies（solarlunar）
 
-# 排盘（自动历法模式，本版仅支持 Asia/Shanghai）
-node paipan/bin/paipan.ts --lines 8 7 8 8 8 7 --at 2006-05-10T14:22:00 --timezone Asia/Shanghai --day-boundary zi23
+# ── 排盘（手动历法模式，不需要 Python、不需要网络） ──
+node bin/paipan.ts --lines 8 7 8 8 8 7 --day 戊辰 --month 申
+node bin/paipan.ts --lines 6 7 8 9 7 8 --canonical       # 缺历法 → 六神/旬空为 null 并附原因
 
-# 核对
-node paipan/scripts/core-check.mjs
-node paipan/scripts/names-check.mjs          # 需要 storage/repos 下的两个上游快照（审查用，不入发布包）
-node paipan/scripts/invariants.mjs
+# ── 排盘（自动历法模式，本版仅支持 Asia/Shanghai） ──
+node bin/paipan.ts --lines 8 7 8 8 8 7 --at 2006-05-10T14:22:00 --timezone Asia/Shanghai --day-boundary zi23
+
+# ── 核对 ──
+node scripts/core-check.mjs      # 27/27：原页锚点、历法、日界、缺项、稳定性
+node scripts/invariants.mjs      # 8/8：4096 组合结构不变量
+node scripts/regression.mjs      # 25/25：验收反例（非法输入、六十甲子、节气交接、年柱口径）
+node scripts/names-check.mjs     # 64/64：需 storage/repos 下的两个上游快照（审查用，不入发布包）
 ```
 
-错误输入示例（均 exit 2 且带可识别 code）：`invalid_line_value`、`invalid_date`、`unsupported_timezone`、`missing_timezone`、`incomplete_manual_calendar`、`out_of_range`。
+错误输入示例（均 exit 2 且带可识别 code）：`invalid_line_value`、`missing_option_value`、`duplicate_option`、`unknown_option`、`unexpected_argument`、`conflicting_calendar_mode`、`invalid_day_ganzhi`、`invalid_date`、`unsupported_timezone`、`missing_timezone`、`incomplete_manual_calendar`、`out_of_range`。
 
 ## 6. 迁移目录运行证据与未完成项
 
@@ -111,8 +118,41 @@ exit=0
 
 即：把 `paipan/` 整体复制到项目目录之外后，仅凭 Node（v22）+ 随包 `node_modules` 即可运行，结果与项目内完全一致、不含任何主机绝对路径。
 
-## 8. 文件清单与哈希
+## 8. 发布内容清单与 SHA-256
 
-- 本阶段新增/修改的受版本控制文件见 `git log --oneline` 中第三阶段的提交（`1ba9f12`、`fd7f428`、`bd0cbff`、`8e0098a` 及最后一次提交）。
-- 上游快照的逐文件 SHA-256：`storage/repos/liuyao-skills-file-sha256.txt`（74 项）、`storage/repos/fortune-liuyao-skill-file-sha256.txt`（70 项）。
-- 运行时依赖锁定：`paipan/package-lock.json`；唯一运行时依赖 `lunar-typescript@1.8.6`（MIT，零传递依赖）。
+本阶段受版本控制的模块文件（15 项；`node_modules` 不入库，按 `package-lock.json` 重装）：
+
+| 文件 | SHA-256 |
+| --- | --- |
+| `paipan/.npmrc` | `171c76ccf91915dd0a758a4c479fe62d9f71aec13597648ef2ad4abcaf2ca623` |
+| `paipan/THIRD_PARTY_LICENSES.md` | `669258920b85f7e52c6a70e866641d8bcc0efb4988541571bcfac5faaef3d839` |
+| `paipan/bin/paipan.ts` | `2816dba13c38b9a91fffbdeae1e79512a0670ee3de371f4cfb879bc12ca27079` |
+| `paipan/package-lock.json` | `7b63f3553d2d0ffb122ef2169a9de10aff0a8fa3deaa8968155cd9cd3b208b08` |
+| `paipan/package.json` | `2b48df4e371210d877bdcf3144c02ed1002124d98e6af1f5823631401c6f97c6` |
+| `paipan/rules/rule-profile.v1.json` | `23ce91703a0a7630737c2418252d884e59184ef366f119743187a42fe41d3223` |
+| `paipan/scripts/boundary-probe.mjs` | `5709a7b52f577df84f9702737876d4e1fa02c9078166de4d9140184d36c4438c` |
+| `paipan/scripts/calendar-probe.mjs` | `c69673ab7991cbe68f85423a8d16022910936157358aceeea6e9db8e1e813135` |
+| `paipan/scripts/core-check.mjs` | `ff9eb3f66712274f169143c741bfbcb31e6e11ac83a229e7cabe025a4640e357` |
+| `paipan/scripts/invariants.mjs` | `749e380e166b4072d5445553f91ccd4228295f005d7a077fcfc7ef3876bbe70a` |
+| `paipan/scripts/names-check.mjs` | `c733cd7ced55efa198ba234085d8327944f05b494e9f23faa0ecd3bf1b5dc638` |
+| `paipan/scripts/regression.mjs` | （随提交更新） |
+| `paipan/scripts/upstream-compare.mjs` | `ceeac69592165f5b471620a55a83147e5f3106946c77d5d02003a70c04fbfd58` |
+| `paipan/src/calendar.ts` | `17b0f34cfcfd71f2c93611ae01b965f5bb3424163b03f9bc02c50f73df20570b` |
+| `paipan/src/core.ts` | `04d309a06935660c15445b8e87a83f36e469a27eb2bd42466f7c6608c9f2083d` |
+| `paipan/src/rules.ts` | `49b82d1f4bb8034c867c5775d966eca2756eb506bd2323480d10c4b2e3b2a4bf` |
+
+- 运行时依赖锁定：`paipan/package-lock.json`（生产仅 `lunar-typescript@1.8.6`；`solarlunar@3.1.0` 为 devDependency）。
+- 上游快照逐文件哈希（审查用，不入发布包）：`storage/repos/liuyao-skills-file-sha256.txt`（74 项）、`storage/repos/fortune-liuyao-skill-file-sha256.txt`（70 项）。
+
+## 9. 针对验收报告（`7a6ab8d`）四项 P1 与四项证据问题的修复
+
+| 项 | 原因 | 修复 | 复验证据 |
+| --- | --- | --- | --- |
+| P1-1 非法/不完整输入被当作有效 | `--lines` 用 `Number.parseInt`（`7abc`、`7.5` 被截成 7）；缺值参数解析成布尔；`--at` 与手动模式并存时静默覆盖 | 爻值只接受字符串 `6/7/8/9`；新增 `missing_option_value`、`duplicate_option`、`unknown_option`、`unexpected_argument`、`conflicting_calendar_mode`；原始爻值原样回显 `input.rawLineValues`，历法来源写入 `calendar.source` | `node paipan/scripts/regression.mjs` → 相关 11 项通过（含 `7abc`、`7.5`、缺 `--at` 值、重复 `--at`、`--at` 与 `--day/--month` 冲突、手动模式带 `--timezone`） |
+| P1-2 手动模式接受不可能的日柱 | 只校验干、支字符集，未校验六十甲子配对 | 新增 `isSexagenary()`（干支索引同奇偶），非法日柱返回 `invalid_day_ganzhi` 且不产生盘面 | 回归中「甲丑/乙子 非法、戊辰 合法、六十甲子恰 60 个、`--day 甲丑` exit 2 且无 `voidBranches`」全部通过 |
+| P1-3 节气窗口提前跳转 | 用了按天口径 `getPrevJieQi(true)` | 改用按时刻口径 `getPrevJieQi(false)/getNextJieQi(false)`，并输出当地交接时间 `previousAt/nextAt` | 回归中 2026-08-07 `19:42:42` → 前=大暑/后=立秋、`19:42:43` → 前=立秋/后=处暑、前一日 → 大暑/立秋，且月柱在交接秒才由乙未变丙申 |
+| P1-4 发布与依赖契约不一致 | `solarlunar` 被列为生产依赖；`.npmrc` 写死本机缓存路径；engines 声明 `>=22.0.0` 但交付 `.ts` | `solarlunar` 移入 devDependencies；`.npmrc` 只留 registry；engines 改为 `>=22.18.0` 并在第 5 节说明 22.6–22.17 需 `--experimental-strip-types` | `npm ls --omit=dev --depth=0` → 仅 `lunar-typescript@1.8.6`；**新目录只复制源码/配置/锁文件后用 `npm ci --omit=dev` 重装**（added 1 package，node_modules 79 个文件）→ CLI 正常、回归 25/25、盘面 JSON 零主机盘符路径 |
+| 证据项 1 原书第 20 页内部矛盾 | 卦盘图标注「世初应四」，同页正文写「世爻官鬼寅木」（二爻）与「应爻子水动」（五爻） | 在规则口径第 5 节与 `rule-profile.v1.json` 的 `differences.corpusInternalConflicts` 登记冲突，说明本项目采用世二应五（与正文及八宫规则一致），**不改写原件**，该页维持 `needs_review` | 见 `docs/phase3_rule_profile.md` 第 5 节 |
+| 证据项 2 年柱口径未声明 | `yearGanzhi` 用农历年、`monthGanzhi` 用节令月，混在一起像同一体系 | 拆成 `yearGanzhi`（农历年）与 `yearGanzhiByLiChun`（立春换年），并在规则口径第 2、6 节标注"哪一种是六爻通行口径未核实" | 回归中 2024-02-08 12:00 → 癸卯 / 甲辰 / 丙寅 三项分列通过 |
+| 证据项 3 缺人读版规则说明 | 任务书第 7.2 节要求的 `docs/phase3_rule_profile.md` 缺失 | 新增该文件（字段定义、来源定位、默认选择、差异表、第 20 页冲突、未核实清单） | 文件已提交；本文件第 8 节给出实际清单与 SHA-256 |
+| 证据项 4 上游对照脚本不能当逐字段证据 | JS 行阴阳 `undefined`、六亲空；Python 输出乱码；解析失败仍退出 0 | 按两侧真实结构做字段归一（`isYang`/`text`/六亲候选名）；Python 强制 `PYTHONIOENCODING=utf-8`；解析失败或关键字段缺失时**非零退出**并打印原因 | `node paipan/scripts/upstream-compare.mjs` → 两侧均解析成功、字段齐全时退出 0；缺字段/解析失败时退出 1 并列出问题 |

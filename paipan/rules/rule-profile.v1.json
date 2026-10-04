@@ -123,7 +123,27 @@
     ],
     "corpusVsImplementations": [
       { "case": "山水蒙（corpus/figures/src-e6fc8612e955/page-003.md:14-23）", "issue": "无差异：原页以「妻财酉金 / 子孙戌土」并列伏神与飞神，与两家实现一致", "action": "无需修正；本条保留为已核对的正面证据" }
-    ]
+    ],
+    "corpusInternalConflicts": [
+      {
+        "case": "山天大畜（corpus/figures/src-e6fc8612e955/page-020.md）",
+        "issue": "同一页内部矛盾：卦盘图标注「世初、应四」，同页正文却写「世爻官鬼寅木」（二爻）与「应爻子水动」（五爻）；人工目视复核原页确实如此",
+        "projectChoice": "本项目输出与 liuyao-skills 均为世二、应五（与同页正文及京房八宫规则一致：山天大畜为艮宫二世卦）",
+        "action": "登记冲突，不把图中标注当作无争议金标准，也不改写原件；该页在阶段 2 已标 needs_review，其卦例不作为默认规则来源",
+        "evidenceLevel": "corpus_original_page"
+      }
+    ],
+    "yearPillarConvention": {
+      "issue": "农历年与立春换年不是同一四柱体系；上游未显式区分",
+      "fields": { "yearGanzhi": "农历年（lunar-typescript 默认口径）", "yearGanzhiByLiChun": "立春换年（getYearInGanZhiExact）" },
+      "sample": "2024-02-08 12:00 Asia/Shanghai → yearGanzhi=癸卯，yearGanzhiByLiChun=甲辰，monthGanzhi=丙寅（节令月）",
+      "status": "unverified：哪一种是六爻排盘通行口径未取到领域证据，本阶段只做到分列不混用"
+    },
+    "packaging": {
+      "productionDependency": "lunar-typescript@1.8.6（MIT，零传递依赖）",
+      "devDependency": "solarlunar@3.1.0（ISC，仅开发期独立对照；验收报告 P1-4 指出的依赖契约不一致已修正）",
+      "nodeMinimum": ">=22.18.0（内建类型剥离默认开启；22.6.0–22.17.x 需 --experimental-strip-types）"
+    }
   },
   "notImplementedInThisPhase": [
     "用神选取（需问题语境与流派规则，属阶段 4）",
