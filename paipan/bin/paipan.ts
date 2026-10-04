@@ -50,6 +50,8 @@ for (let index = 0; index < argv.length; index += 1) {
   const next = argv[index + 1];
   if (next === undefined || next.startsWith('--')) fail('missing_option_value', `--${name} 需要值，但没有提供`);
   if (name === 'lines') {
+    // 重复提供 --lines 会静默覆盖前一组，导致原始输入不可追溯（复验报告 P1-1）→ 直接拒绝。
+    if (values.has(name)) fail('duplicate_option', '--lines 出现了多次；本项目拒绝静默采用后一组，请只提供一组初爻在前的六个爻值');
     const list: string[] = [];
     let cursor = index + 1;
     while (cursor < argv.length && !argv[cursor]!.startsWith('--')) {

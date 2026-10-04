@@ -36,6 +36,8 @@ for (const [label, args, code] of [
   ['--timezone 缺值', ['--lines', '7', '7', '7', '7', '7', '7', '--at', '2024-02-08T12:00:00', '--timezone'], 'missing_option_value'],
   ['未知参数', ['--lines', '7', '7', '7', '7', '7', '7', '--day', '甲子', '--month', '寅', '--bogus'], 'unknown_option'],
   ['重复 --at', ['--lines', '7', '7', '7', '7', '7', '7', '--at', '2024-02-08T12:00:00', '--at', '2024-02-09T12:00:00', '--timezone', 'Asia/Shanghai'], 'duplicate_option'],
+  ['重复 --lines（复验 P1-1）', ['--lines', '6', '6', '6', '6', '6', '6', '--lines', '7', '7', '7', '7', '7', '7', '--day', '甲子', '--month', '寅', '--canonical'], 'duplicate_option'],
+  ['--lines 与 --help 之外的重复 --day', ['--lines', '7', '7', '7', '7', '7', '7', '--day', '甲子', '--day', '乙丑', '--month', '寅'], 'duplicate_option'],
 ]) {
   const result = run(...args);
   check(label, result.status === 2 && result.json?.error?.code === code, `exit=${result.status} code=${result.json?.error?.code ?? '(无)'}`);

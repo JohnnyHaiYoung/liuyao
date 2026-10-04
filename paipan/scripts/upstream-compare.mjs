@@ -1,33 +1,46 @@
-// 上游两套实现的同输入对照（阶段 3，开发期工具）
+// 三方逐字段对照：自研核心 vs liuyao-skills(JS) vs fortune-liuyao-skill(Python)
 //
-// 验收报告（7a6ab8d）证据项 4 的修复：字段映射按两侧真实结构提取、Python 强制 UTF-8、
-// 解析失败或关键字段缺失时**非零退出**，避免"脚本退出成功"被当成逐字段一致证据。
+// 复验报告（043eaf5）P1-2 要求：若把本命令作为"逐字段一致"证据，就必须真的逐字段比较，
+// 并在发现差异时非零退出；否则只能作为人工对照材料。本脚本做前者：
+//   · 字段归一按**固定上游的实际结构**（JS 的六亲在 current.text 内，如「父母丙寅木」）；
+//   · Python 侧强制 UTF-8 输出；
+//   · 任一侧解析失败、关键字段缺失或三方不一致 → 退出码 1，并逐条列出。
+//
+// 用法：
+//   node paipan/scripts/upstream-compare.mjs
+//   node paipan/scripts/upstream-compare.mjs 7 7 9 6 6 7 戊戌 亥     # 自定义爻值/日柱/月建
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildChart, canonicalize } from '../src/core.ts';
+import { fromManual } from '../src/calendar.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..', '..');
-const lines = process.argv.slice(2).length === 6 ? process.argv.slice(2).map(Number) : [8, 7, 8, 8, 8, 7];
-const dayGanzhi = '戊辰';
-const monthBranch = '申';
+const SIX_RELATIVES = ['父母', '兄弟', '子孙', '妻财', '官鬼'];
+// 术语变体（同一个东西的异体字，不是规则差异）：本项目按阶段 2 原页用字取「螣蛇」，
+// fortune-liuyao-skill 写作「腾蛇」。归一后比较规则取值，变体单独记录。
+const SPIRIT_VARIANTS = { 腾蛇: '螣蛇' };
+const normalizeSpirit = (value) => (value === null || value === undefined ? null : SPIRIT_VARIANTS[value] ?? value);
+const variants = [];
+const noteVariant = (label, position, mineValue, otherValue) => {
+  if (mineValue !== otherValue && normalizeSpirit(otherValue) === mineValue) {
+    variants.push(`${label} 第${position}爻 六神：本项目「${mineValue}」/ 上游「${otherValue}」（异体字，已归一）`);
+  }
+};
+const NORMALIZE_YINYANG = (value) => (value === true || value === 'yang' || value === '阳' ? 'yang' : value === false || value === 'yin' || value === '阴' ? 'yin' : null);
+
+const argv = process.argv.slice(2);
+const inputs = argv.length >= 8
+  ? [{ lines: argv.slice(0, 6).map(Number), day: argv[6], month: argv[7] }]
+  : [
+      { lines: [8, 7, 8, 8, 8, 7], day: '戊辰', month: '申' },
+      { lines: [7, 7, 9, 6, 6, 7], day: '戊戌', month: '亥' },
+    ];
+
 const problems = [];
+const diffs = [];
 
-// --- A) liuyao-skills（纯 JS 核心，经其 CLI 装配层） ---
-const jsCli = path.join(repo, 'storage', 'repos', 'liuyao-skills', 'liuyao-paipan-code', 'scripts', 'paipan.mjs');
-const jsRun = spawnSync('node', [jsCli, '--lines', ...lines.map(String), '--day', dayGanzhi, '--month', monthBranch], {
-  encoding: 'utf8',
-  windowsHide: true,
-});
-const jsText = (jsRun.stdout ?? '').replace(/^\uFEFF/, '');
-let js = null;
-try {
-  js = JSON.parse(jsText.slice(jsText.indexOf('{')));
-} catch (error) {
-  problems.push(`liuyao-skills 输出无法解析：${error.message}`);
-}
-
-/** 从一行里按候选字段名取值；两侧命名不同，统一在这里归一。 */
 const pick = (source, names) => {
   for (const name of names) {
     const value = source?.[name];
@@ -36,78 +49,148 @@ const pick = (source, names) => {
   return null;
 };
 
-const jsRows = [];
-if (js) {
-  for (const row of (js.rows ?? []).slice().sort((a, b) => (b.lineNumber ?? 0) - (a.lineNumber ?? 0))) {
-    const current = row.current ?? row;
-    const najiaText = pick(current, ['text', 'najiaText']) ?? '';
-    const isYang = pick(current, ['isYang']);
-    const yinYang = isYang === null ? pick(current, ['yinYang']) : isYang ? 'yang' : 'yin';
-    jsRows.push({
-      position: pick(current, ['position']) ?? row.lineNumber,
-      yinYang,
-      najiaText,
-      sixRelative: pick(current, ['sixRelative', 'relative', 'sixQin']),
-      sixSpirit: pick(row, ['spirit', 'sixSpirit']),
-      hidden: pick(row, ['hidden', 'hiddenCandidate']),
-    });
+/** 从「父母丙寅木」这类文本里拆出六亲与纳甲。 */
+const parseNajiaText = (text) => {
+  const value = String(text ?? '');
+  const relative = SIX_RELATIVES.find((item) => value.startsWith(item)) ?? null;
+  const rest = relative ? value.slice(relative.length) : value;
+  const match = /^([甲乙丙丁戊己庚辛壬癸])([子丑寅卯辰巳午未申酉戌亥])([金木水火土])?$/.exec(rest);
+  if (!match) return { relative, najia: null };
+  return { relative, najia: `${match[1]}${match[2]}${match[3] ?? ''}` };
+};
+
+function runJs(lines, day, month) {
+  const cli = path.join(repo, 'storage', 'repos', 'liuyao-skills', 'liuyao-paipan-code', 'scripts', 'paipan.mjs');
+  const result = spawnSync('node', [cli, '--lines', ...lines.map(String), '--day', day, '--month', month], { encoding: 'utf8', windowsHide: true });
+  const text = (result.stdout ?? '').replace(/^\uFEFF/, '');
+  try {
+    const parsed = JSON.parse(text.slice(text.indexOf('{')));
+    const rows = new Map();
+    for (const row of parsed.rows ?? []) {
+      const current = row.current ?? row;
+      const { relative, najia } = parseNajiaText(pick(current, ['text', 'najiaText']));
+      const position = Number(pick(current, ['position']) ?? row.lineNumber);
+      rows.set(position, {
+        yinYang: NORMALIZE_YINYANG(pick(current, ['isYang', 'yinYang'])),
+        najia,
+        sixRelative: pick(current, ['sixRelative', 'relative']) ?? relative,
+        sixSpirit: pick(row, ['spirit', 'sixSpirit']),
+      });
+    }
+    return { rows, palace: parsed.palace?.name ?? null, voidBranches: parsed.calendar?.emptyBranches ?? null, raw: parsed };
+  } catch (error) {
+    problems.push(`liuyao-skills 输出无法解析：${error.message}`);
+    return { rows: new Map(), palace: null, voidBranches: null, raw: null };
   }
-  if (jsRows.some((row) => row.yinYang === null)) problems.push('liuyao-skills 行缺少阴阳字段（字段名可能又是新的）');
-  if (jsRows.some((row) => !row.sixRelative)) problems.push('liuyao-skills 行缺少六亲字段（JS 侧六亲可能在 text 内）');
 }
 
-// --- B) fortune-liuyao-skill（Python 核心，只读调用，显式不写盘） ---
-const pyScripts = path.join(repo, 'storage', 'repos', 'fortune-liuyao-skill', 'scripts');
-const pyCode = [
-  'import json,sys',
-  `sys.path.insert(0, r'${pyScripts}')`,
-  "sys.path.insert(0, r'" + path.join(repo, 'storage', 'repos', 'fortune-liuyao-skill', 'vendor') + "')",
-  'from liuyao_core import build_chart',
-  `chart = build_chart(${JSON.stringify(lines)}, day_ganzhi=${JSON.stringify(dayGanzhi)}, month_branch=${JSON.stringify(monthBranch)}, cast_at='2026-08-04T11:17:00+08:00')`,
-  "print(json.dumps(chart, ensure_ascii=False))",
-].join('\n');
-const pyRun = spawnSync('E:\\python\\Python312\\python.exe', ['-c', pyCode], {
-  encoding: 'utf8',
-  windowsHide: true,
-  cwd: pyScripts,
-  env: { ...process.env, PYTHONIOENCODING: 'utf-8' }, // 不加会在本地编码下变成乱码
-});
-const pyText = (pyRun.stdout ?? '').replace(/^\uFEFF/, '');
-let py = null;
-try {
-  py = JSON.parse(pyText);
-} catch (error) {
-  problems.push(`fortune Python 输出无法解析：${error.message}｜stderr: ${(pyRun.stderr ?? '').slice(0, 160)}`);
+function runPython(lines, day, month) {
+  const scripts = path.join(repo, 'storage', 'repos', 'fortune-liuyao-skill', 'scripts');
+  const code = [
+    'import json,sys',
+    `sys.path.insert(0, r'${scripts}')`,
+    "sys.path.insert(0, r'" + path.join(repo, 'storage', 'repos', 'fortune-liuyao-skill', 'vendor') + "')",
+    'from liuyao_core import build_chart',
+    `chart = build_chart(${JSON.stringify(lines)}, day_ganzhi=${JSON.stringify(day)}, month_branch=${JSON.stringify(month)}, cast_at='2026-08-04T11:17:00+08:00')`,
+    "print(json.dumps(chart, ensure_ascii=False))",
+  ].join('\n');
+  const result = spawnSync('E:\\python\\Python312\\python.exe', ['-c', code], {
+    encoding: 'utf8',
+    windowsHide: true,
+    cwd: scripts,
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+  });
+  try {
+    const parsed = JSON.parse((result.stdout ?? '').replace(/^\uFEFF/, ''));
+    const chart = parsed.chart ?? parsed;
+    const rows = new Map();
+    for (const line of chart.lines ?? []) {
+      rows.set(Number(line.position), {
+        yinYang: NORMALIZE_YINYANG(line.yinYang),
+        najia: `${line.najiaStem ?? ''}${line.najiaBranch ?? ''}${line.najiaElement ?? ''}`,
+        sixRelative: line.sixRelative ?? null,
+        sixSpirit: line.sixSpirit ?? null,
+      });
+    }
+    return { rows, palace: chart.palaceElement ? `${chart.palace}(${chart.palaceElement})` : chart.palace ?? null, voidBranches: (chart.voidBranches ?? []).join(''), raw: chart };
+  } catch (error) {
+    problems.push(`fortune Python 输出无法解析：${error.message}｜stderr: ${(result.stderr ?? '').slice(0, 160)}`);
+    return { rows: new Map(), palace: null, voidBranches: null, raw: null };
+  }
 }
 
-console.log(`输入：初爻在前 [${lines.join(' ')}]，日柱 ${dayGanzhi}，月建 ${monthBranch}`);
-console.log('\n=== A) liuyao-skills（JS） ===');
-for (const row of jsRows) {
-  console.log(
-    `  ${row.position}爻 阴阳=${row.yinYang ?? '(缺)'} 纳甲=${row.najiaText || '(缺)'} 六亲=${row.sixRelative ?? '(缺)'}` +
-      ` 六神=${row.sixSpirit ?? '(缺)'}${row.hidden ? ' 伏=' + row.hidden : ''}`,
-  );
-}
+const sortBranches = (value) => (typeof value === 'string' ? [...value].sort().join('') : null);
 
-console.log('\n=== B) fortune-liuyao-skill（Python） ===');
-if (py) {
-  const chart = py.chart ?? py;
-  console.log(`  宫：${chart.palace ?? '?'}(${chart.palaceStage ?? ''})；旬空：${JSON.stringify(chart.voidBranches ?? [])}；月建：${chart.monthBranch ?? '?'}`);
-  for (const line of (chart.lines ?? []).slice().sort((a, b) => (b.position ?? 0) - (a.position ?? 0))) {
+for (const { lines, day, month } of inputs) {
+  const label = `[${lines.join(' ')}] ${day}日 ${month}月`;
+  console.log(`\n########## 输入：${label} ##########`);
+  const mine = canonicalize(buildChart(lines, fromManual(day, month)));
+  const js = runJs(lines, day, month);
+  const py = runPython(lines, day, month);
+
+  const myRows = new Map(mine.lines.map((line) => [line.position, {
+    yinYang: line.yinYang,
+    najia: `${line.najia.stem}${line.najia.branch}${line.najia.element}`,
+    sixRelative: line.sixRelative,
+    sixSpirit: line.sixSpirit,
+  }]));
+
+  const same = (a, b) => a !== null && b !== null && a === b;
+  console.log(`  我方：${mine.chart.original.name} → ${mine.chart.changed?.name ?? '（无变卦）'}；宫 ${mine.chart.palace.name}(${mine.chart.palace.element}) ${mine.chart.palace.stage}；世${mine.chart.shiPosition}应${mine.chart.yingPosition}；旬空 ${(mine.chart.voidBranches ?? []).join('')}`);
+  console.log(`  JS  ：宫 ${js.palace ?? '(缺)'}；旬空 ${js.voidBranches ?? '(缺)'}`);
+  console.log(`  PY  ：宫 ${py.palace ?? '(缺)'}；旬空 ${py.voidBranches ?? '(缺)'}`);
+
+  const pairs = [
+    ['旬空', sortBranches((mine.chart.voidBranches ?? []).join('')), sortBranches(js.voidBranches), sortBranches(py.voidBranches)],
+  ];
+  for (const [name, mineValue, jsValue, pyValue] of pairs) {
+    const okJs = same(mineValue, jsValue);
+    const okPy = same(mineValue, pyValue);
+    console.log(`  ${name}：我方=${mineValue ?? '(缺)'} JS=${jsValue ?? '(缺)'}${okJs ? ' ✓' : ' ✗'} PY=${pyValue ?? '(缺)'}${okPy ? ' ✓' : ' ✗'}`);
+    if (!okJs) diffs.push(`${label} ${name}：我方 ${mineValue} ≠ JS ${jsValue}`);
+    if (!okPy) diffs.push(`${label} ${name}：我方 ${mineValue} ≠ PY ${pyValue}`);
+  }
+
+  for (const position of [6, 5, 4, 3, 2, 1]) {
+    const mineRow = myRows.get(position);
+    const jsRow = js.rows.get(position);
+    const pyRow = py.rows.get(position);
+    if (!jsRow) problems.push(`${label} JS 缺少第 ${position} 爻`);
+    if (!pyRow) problems.push(`${label} PY 缺少第 ${position} 爻`);
+    for (const field of ['yinYang', 'najia', 'sixRelative', 'sixSpirit']) {
+      const mineValue = mineRow?.[field] ?? null;
+      const jsValue = jsRow?.[field] ?? null;
+      const pyValue = pyRow?.[field] ?? null;
+      if (jsValue === null) problems.push(`${label} JS 第 ${position} 爻缺少 ${field}`);
+      if (pyValue === null) problems.push(`${label} PY 第 ${position} 爻缺少 ${field}`);
+      if (field === 'sixSpirit') {
+        noteVariant(label, position, mineValue, jsValue);
+        noteVariant(label, position, mineValue, pyValue);
+      }
+      const normalizedJs = field === 'sixSpirit' ? normalizeSpirit(jsValue) : jsValue;
+      const normalizedPy = field === 'sixSpirit' ? normalizeSpirit(pyValue) : pyValue;
+      if (!same(mineValue, normalizedJs)) diffs.push(`${label} 第${position}爻 ${field}：我方 ${mineValue} ≠ JS ${jsValue}`);
+      if (!same(mineValue, normalizedPy)) diffs.push(`${label} 第${position}爻 ${field}：我方 ${mineValue} ≠ PY ${pyValue}`);
+    }
     console.log(
-      `  ${line.position}爻 阴阳=${line.yinYang ?? '(缺)'} 纳甲=${line.najiaStem ?? ''}${line.najiaBranch ?? ''}${line.najiaElement ?? ''}` +
-        ` 六亲=${line.sixRelative ?? '(缺)'} 六神=${line.sixSpirit ?? '(缺)'}${line.isShi ? ' 世' : ''}${line.isYing ? ' 应' : ''}${line.isVoid ? ' 空' : ''}`,
+      `  ${position}爻 我方 ${mineRow?.yinYang}/${mineRow?.najia}/${mineRow?.sixRelative}/${mineRow?.sixSpirit}` +
+        ` | JS ${jsRow?.yinYang ?? '(缺)'}/${jsRow?.najia ?? '(缺)'}/${jsRow?.sixRelative ?? '(缺)'}/${jsRow?.sixSpirit ?? '(缺)'}` +
+        ` | PY ${pyRow?.yinYang ?? '(缺)'}/${pyRow?.najia ?? '(缺)'}/${pyRow?.sixRelative ?? '(缺)'}/${pyRow?.sixSpirit ?? '(缺)'}`,
     );
   }
 }
 
-console.log('\n=== C) 阶段 2 原页（corpus/figures/src-e6fc8612e955/page-003.md，人工目视） ===');
-console.log('  离宫 山水蒙：上=父母寅木、五=官鬼子水、四=妻财酉金/子孙戌土(世)、三=兄弟午火、二=子孙辰土、初=父母寅木(应)');
-
-if (problems.length > 0) {
-  console.error('\n对照未完成（不得据此声称逐字段一致）：');
-  for (const item of problems) console.error(`  - ${item}`);
-  process.exitCode = 1;
+console.log('\n=== 汇总 ===');
+console.log(`  逐字段不一致：${diffs.length} 条`);
+for (const item of diffs.slice(0, 20)) console.log('    ' + item);
+console.log(`  解析/字段缺失问题：${problems.length} 条`);
+for (const item of problems.slice(0, 12)) console.log('    ' + item);
+console.log(`  术语变体（已归一，不计为差异）：${variants.length} 条`);
+for (const item of [...new Set(variants)].slice(0, 6)) console.log('    ' + item);
+if (diffs.length === 0 && problems.length === 0) {
+  console.log('  三方在阴阳/纳甲/六亲/六神/旬空上逐字段一致（仍不等于传统规则正确）。');
+  process.exitCode = 0;
 } else {
-  console.log('\n两侧输出均解析成功、关键字段齐全；逐字段一致性需按上表人工比对（本脚本只做映射与呈现）。');
+  console.log('  对照未通过：不得据此声称逐字段一致。');
+  process.exitCode = 1;
 }

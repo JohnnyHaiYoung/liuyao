@@ -32,7 +32,7 @@
 | 原页锚点 + 历法 + 日界 + 缺项 + 稳定性 | `node paipan/scripts/core-check.mjs` | **27/27 通过**。含：山水蒙逐爻六亲纳甲、离宫四世、世4应1、旬空戌亥、六神起例、伏神妻财己酉金@4（与阶段 2 原页转写一致）；自动历法 2006-05-10 14:22 → 己亥日/癸巳月/辛未时；2024-01-01 23:30 zi23=乙丑 vs midnight=甲子；缺历法时六神/旬空为 null 且有原因；同输入两次 canonical 完全相同 |
 | 64 卦名全量比对 | `node paipan/scripts/names-check.mjs` | 与 `liuyao-skills`、`fortune-liuyao-skill` **各 64/64 零不一致** |
 | 4096 组合结构不变量 | `node paipan/scripts/invariants.mjs` | **8/8 通过**：遍历 4096；本卦恰 64 种且各出现 64 次；八宫×8 阶段 64 类各 64 次；动爻分布 = C(6,k)·64（64/384/960/1280/960/384/64）；无违例（世应规则、变卦差异位数=动爻数、纳甲非空、六亲合法、庚戌日旬空=寅卯）；canonical 4096 种互不相同；顺序敏感（反序 → 水雷屯） |
-| 两套上游同输入对照 | `node paipan/scripts/upstream-compare.mjs` | 山水蒙：两家与自研**逐爻一致** |
+| 三方逐字段对照 | `node paipan/scripts/upstream-compare.mjs`（默认两个输入）／`node paipan/scripts/upstream-compare.mjs <6 爻值> <日柱> <月建>`（自定义） | **逐字段自动比较**：阴阳、纳甲（干支+五行）、六亲、六神、旬空、宫；默认样例（山水蒙 戊辰日申月、山天大畜 戊戌日亥月）与自定义新输入（`6 9 7 8 8 6 庚午 巳`）均 **0 差异、退出码 0**；六神「螣蛇/腾蛇」异体字单列为术语变体（本项目按阶段 2 原页用「螣蛇」）。任一侧解析失败、关键字段缺失或不一致 → 退出码 1 |
 | 历法与边界探测 | `node paipan/scripts/calendar-probe.mjs`、`boundary-probe.mjs` | 原页锚点 9/9；独立实现 7/7（2 项为对方范围外）；立秋交接 2026-08-07 19:42:43；时区 ICU 行为 |
 
 **证据等级**（任务书第 6 节要求不得混为一谈）：
@@ -96,11 +96,19 @@ node scripts/names-check.mjs     # 64/64：需 storage/repos 下的两个上游�
 ## 7. 迁移验证命令与结果（复跑记录）
 
 ```powershell
-# 复制模块（含依赖）到项目外临时目录，再运行 CLI
-$dst = "$env:TEMP\paipan-migrate-check"
+# 只复制源码/配置/规则/脚本与锁文件（**不含 node_modules**）到项目外新目录
+$dst = "$env:TEMP\paipan-fresh-install"
 Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item -Recurse "E:\workspace-ai\xuanxue\liuyao\paipan" $dst
-node "$dst\bin\paipan.ts" --lines 8 7 8 8 8 7 --day 戊辰 --month 申 --canonical
+New-Item -ItemType Directory -Force -Path $dst | Out-Null
+foreach ($item in 'package.json','package-lock.json','.npmrc','bin','src','rules','scripts','THIRD_PARTY_LICENSES.md') {
+  Copy-Item -Recurse -Force (Join-Path 'E:\workspace-ai\xuanxue\liuyao\paipan' $item) (Join-Path $dst $item)
+}
+# 在新目录按锁文件重装生产依赖（验收方用 --offline 走本地缓存亦可）
+Push-Location $dst
+npm ci --omit=dev            # 生产依赖只有 lunar-typescript@1.8.6
+node bin/paipan.ts --lines 7 7 9 6 6 7 --day 戊戌 --month 亥 --canonical
+node scripts/regression.mjs  # 25/25（加入重复 --lines 反例后为 27/27）
+Pop-Location
 ```
 
 判定：输出与项目内一致；盘面 JSON 不含 `E:`/`F:` 路径；不访问网络、不调用 Python。
@@ -120,13 +128,13 @@ exit=0
 
 ## 8. 发布内容清单与 SHA-256
 
-本阶段受版本控制的模块文件（15 项；`node_modules` 不入库，按 `package-lock.json` 重装）：
+本阶段受版本控制的模块文件（16 项；`node_modules` 不入库，按 `package-lock.json` 重装）：
 
 | 文件 | SHA-256 |
 | --- | --- |
 | `paipan/.npmrc` | `171c76ccf91915dd0a758a4c479fe62d9f71aec13597648ef2ad4abcaf2ca623` |
 | `paipan/THIRD_PARTY_LICENSES.md` | `669258920b85f7e52c6a70e866641d8bcc0efb4988541571bcfac5faaef3d839` |
-| `paipan/bin/paipan.ts` | `2816dba13c38b9a91fffbdeae1e79512a0670ee3de371f4cfb879bc12ca27079` |
+| `paipan/bin/paipan.ts` | `42e0fbfde1a8965fd069d2f90a32cd830f73966df60512b271bf85320211a3ab` |
 | `paipan/package-lock.json` | `7b63f3553d2d0ffb122ef2169a9de10aff0a8fa3deaa8968155cd9cd3b208b08` |
 | `paipan/package.json` | `2b48df4e371210d877bdcf3144c02ed1002124d98e6af1f5823631401c6f97c6` |
 | `paipan/rules/rule-profile.v1.json` | `23ce91703a0a7630737c2418252d884e59184ef366f119743187a42fe41d3223` |
@@ -135,8 +143,8 @@ exit=0
 | `paipan/scripts/core-check.mjs` | `ff9eb3f66712274f169143c741bfbcb31e6e11ac83a229e7cabe025a4640e357` |
 | `paipan/scripts/invariants.mjs` | `749e380e166b4072d5445553f91ccd4228295f005d7a077fcfc7ef3876bbe70a` |
 | `paipan/scripts/names-check.mjs` | `c733cd7ced55efa198ba234085d8327944f05b494e9f23faa0ecd3bf1b5dc638` |
-| `paipan/scripts/regression.mjs` | （随提交更新） |
-| `paipan/scripts/upstream-compare.mjs` | `ceeac69592165f5b471620a55a83147e5f3106946c77d5d02003a70c04fbfd58` |
+| `paipan/scripts/regression.mjs` | `f233f7f887614ea56cb68efb9d49fec63d1fe4942e71714637ed6e8efe8dc859` |
+| `paipan/scripts/upstream-compare.mjs` | `7a8e230d598f14629bfb2d90af74751a2b20cabbfbb0abe94a715992d391017e` |
 | `paipan/src/calendar.ts` | `17b0f34cfcfd71f2c93611ae01b965f5bb3424163b03f9bc02c50f73df20570b` |
 | `paipan/src/core.ts` | `04d309a06935660c15445b8e87a83f36e469a27eb2bd42466f7c6608c9f2083d` |
 | `paipan/src/rules.ts` | `49b82d1f4bb8034c867c5775d966eca2756eb506bd2323480d10c4b2e3b2a4bf` |
@@ -155,4 +163,14 @@ exit=0
 | 证据项 1 原书第 20 页内部矛盾 | 卦盘图标注「世初应四」，同页正文写「世爻官鬼寅木」（二爻）与「应爻子水动」（五爻） | 在规则口径第 5 节与 `rule-profile.v1.json` 的 `differences.corpusInternalConflicts` 登记冲突，说明本项目采用世二应五（与正文及八宫规则一致），**不改写原件**，该页维持 `needs_review` | 见 `docs/phase3_rule_profile.md` 第 5 节 |
 | 证据项 2 年柱口径未声明 | `yearGanzhi` 用农历年、`monthGanzhi` 用节令月，混在一起像同一体系 | 拆成 `yearGanzhi`（农历年）与 `yearGanzhiByLiChun`（立春换年），并在规则口径第 2、6 节标注"哪一种是六爻通行口径未核实" | 回归中 2024-02-08 12:00 → 癸卯 / 甲辰 / 丙寅 三项分列通过 |
 | 证据项 3 缺人读版规则说明 | 任务书第 7.2 节要求的 `docs/phase3_rule_profile.md` 缺失 | 新增该文件（字段定义、来源定位、默认选择、差异表、第 20 页冲突、未核实清单） | 文件已提交；本文件第 8 节给出实际清单与 SHA-256 |
-| 证据项 4 上游对照脚本不能当逐字段证据 | JS 行阴阳 `undefined`、六亲空；Python 输出乱码；解析失败仍退出 0 | 按两侧真实结构做字段归一（`isYang`/`text`/六亲候选名）；Python 强制 `PYTHONIOENCODING=utf-8`；解析失败或关键字段缺失时**非零退出**并打印原因 | `node paipan/scripts/upstream-compare.mjs` → 两侧均解析成功、字段齐全时退出 0；缺字段/解析失败时退出 1 并列出问题 |
+| 证据项 4 上游对照脚本不能当逐字段证据 | JS 行阴阳 `undefined`、六亲空；Python 输出乱码；解析失败仍退出 0 | 按两侧真实结构做字段归一（JS 六亲在 `current.text` 内，如「父母丙寅木」）；Python 强制 `PYTHONIOENCODING=utf-8`；**改为三方逐字段自动比较**（我方 vs JS vs PY），差异/缺字段/解析失败一律非零退出；六神异体字单列 | `node paipan/scripts/upstream-compare.mjs` → 默认两输入 0 差异退出 0；自定义新输入 `6 9 7 8 8 6 庚午 巳` 同样 0 差异 |
+
+### 9.1 针对复验报告（`043eaf5`）两项 P1 与文档问题的修复
+
+| 项 | 原因 | 修复 | 复验证据 |
+| --- | --- | --- | --- |
+| P1-1 重复 `--lines` 静默覆盖 | `--lines` 分支先于一般重复检查，且直接覆盖旧值 | `--lines` 也检查重复，第二次出现返回 `duplicate_option`；回归脚本补入两条重复参数反例（重复 `--lines`、重复 `--day`） | `node paipan/bin/paipan.ts --lines 6 6 6 6 6 6 --lines 7 7 7 7 7 7 --day 甲子 --month 寅 --canonical` → exit 2 `duplicate_option`；`regression.mjs` **27/27** |
+| P1-2 三方对照在默认输入下失败 | 六亲字段在固定上游的 `current.text` 内，原脚本未解析 | 从 `text` 解析六亲与纳甲；改为逐字段比较（阴阳/纳甲/六亲/六神/旬空/宫）并支持自定义输入；术语变体（螣蛇/腾蛇）单列不计为差异 | 默认两输入与自定义新输入均 **0 差异、exit 0**；解析失败或字段缺失时 exit 1 |
+| 文档：对照证据表述与事实不符 | 交付说明曾称该脚本"已通过"，而当时它实际退出 1 | 第 3 节改为描述真实的逐字段自动比较与退出码语义；本表（第 9 节）同步更正 | 见第 3 节该行 |
+| 文档：发布清单漏填哈希 | `regression.mjs` 的 SHA-256 留作"随提交更新" | 第 8 节补齐全部 16 项文件的 SHA-256（含 `bin/paipan.ts`、`scripts/regression.mjs`、`scripts/upstream-compare.mjs` 的更新值） | 第 8 节表格 |
+| 文档：第 7 节迁移步骤与第 9 节不一致 | 第 7 节仍写"复制带依赖目录运行" | 第 7 节改为与第 9 节一致的**新目录按锁文件重装**（`npm ci --omit=dev`）步骤 | 第 7 节 |
