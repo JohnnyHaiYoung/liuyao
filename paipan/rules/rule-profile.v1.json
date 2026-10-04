@@ -1,0 +1,135 @@
+{
+  "ruleProfileVersion": "liuyao-rule-profile.v1",
+  "updatedAt": "2026-10-04",
+  "scope": {
+    "phase": 3,
+    "delivers": "确定性排盘事实（卦/宫/世应/纳甲/六亲/六神/伏神/旬空/动变/空破），不含任何吉凶推断",
+    "excludes": ["用神选取与吉凶判断", "应期推断", "任何流派解读方法", "现实预测结论"]
+  },
+  "evidenceLevels": {
+    "corpus_original_page": "阶段 2 包内原件原页印出的内容，已人工目视核对（最高等级）",
+    "independent_implementation": "不同作者/不同语言的第二实现一致（独立实现对照）",
+    "domain_rule": "领域通行规则（京房纳甲等），本次由两套上游实现一致印证，但未逐条追溯古籍版本",
+    "third_party_only": "仅凭某一上游实现，未获独立印证",
+    "unverified": "尚未核实"
+  },
+  "input": {
+    "lineValues": {
+      "6": { "yinYang": "yin", "moving": true, "name": "老阴", "marker": "×" },
+      "7": { "yinYang": "yang", "moving": false, "name": "少阳", "marker": "" },
+      "8": { "yinYang": "yin", "moving": false, "name": "少阴", "marker": "" },
+      "9": { "yinYang": "yang", "moving": true, "name": "老阳", "marker": "○" }
+    },
+    "order": "bottom_up",
+    "orderNote": "输入与回显均为初爻在前、上爻在后（索引 0 = 初爻）；显示可以自上而下，但计算与原始输入数组不得倒序",
+    "count": 6,
+    "illegalValue": "返回可识别错误 invalid_line_value（不静默修正）",
+    "coinConvention": {
+      "status": "可选入口，首版不实现自动随机起卦",
+      "note": "若将来接受硬币输入，必须回显正反面约定与换算表；两家上游约定相反（一家三背=9、另一家三背=6），不得混用"
+    }
+  },
+  "calendar": {
+    "source": "lunar-typescript@1.8.6（MIT，零运行时依赖）",
+    "decisionDoc": "docs/phase3_calendar_decision.md",
+    "timezone": {
+      "allowList": ["Asia/Shanghai"],
+      "others": "返回 unsupported_timezone（明确拒绝，不回退）",
+      "serverZoneUse": "服务器系统时区不得成为隐式输入",
+      "implementation": "Node 原生 Intl.DateTimeFormat（full ICU），不依赖 Python"
+    },
+    "dayBoundary": {
+      "default": "zi23",
+      "options": {
+        "zi23": { "rule": "23:00 换日", "api": "getDayInGanZhiExact()", "evidence": "independent_implementation: 实测 23:30 时 Exact=次日日柱、Exact2=当日日柱" },
+        "midnight": { "rule": "00:00 换日", "api": "getDayInGanZhiExact2()" }
+      },
+      "rule": "同一盘面在后续计算中不得切换日界"
+    },
+    "monthBranch": {
+      "rule": "按节气交接时刻换月（节令月，非农历月、非民用月）",
+      "api": "getMonthInGanZhiExact()",
+      "evidence": "corpus_original_page: 2006-05-10 14:22 原页月柱「癸巳」与之一致；independent_implementation: 2026 立秋交接 08-07 19:42:43，按天的 getMonthInGanZhi() 在当日 00:30 即提前换月（早 19 小时），故必须用 Exact",
+      "fieldSeparation": "农历月、民用月、节令月必须分字段，不得混为一个字段"
+    },
+    "supportedRange": { "from": "1901-01-01", "to": "2099-12-31", "note": "保守声明；上游实测可算 1800–2200，但本项目只声明已验证范围，超出返回 out_of_range" },
+    "strictGregorianValidation": {
+      "required": true,
+      "reason": "上游库对 2026-02-30 会静默溢出成别的日期（实测），排盘前必须自行严格校验"
+    },
+    "solarTermEvidence": { "api": "getPrevJieQi(true)/getNextJieQi(true) 与 getJieQiTable()", "boundarySample": "2026 立秋 = 2026-08-07 19:42:43" }
+  },
+  "facts": {
+    "palace": {
+      "scheme": "京房八宫（本宫、一世至五世、游魂、归魂）",
+      "derivation": "以本卦六爻位与八纯卦逐位异或匹配世位模式",
+      "evidence": "independent_implementation: liuyao-skills JS 与 fortune Python 对 64 卦分宫自洽（子代理实测 8×8 无遗漏）；corpus_original_page: 原页标注「离宫：山水蒙（四世）」与本模块一致",
+      "sourceLevel": "domain_rule"
+    },
+    "shiYing": {
+      "rule": "世位由卦位阶段决定（本宫6、一世1、二世2、三世3、四世4、五世5、游魂4、归魂3），应位 = ((世+2) mod 6) + 1",
+      "evidence": "independent_implementation: 两家一致；corpus_original_page: 山水蒙世4应1与原页一致",
+      "sourceLevel": "domain_rule"
+    },
+    "najia": {
+      "scheme": "京房纳甲：下卦（初二三）取该经卦内卦干支，上卦（四五六）取外卦干支",
+      "table": {
+        "乾": { "inner": ["甲子", "甲寅", "甲辰"], "outer": ["壬午", "壬申", "壬戌"] },
+        "坤": { "inner": ["乙未", "乙巳", "乙卯"], "outer": ["癸丑", "癸亥", "癸酉"] },
+        "震": { "inner": ["庚子", "庚寅", "庚辰"], "outer": ["庚午", "庚申", "庚戌"] },
+        "巽": { "inner": ["辛丑", "辛亥", "辛酉"], "outer": ["辛未", "辛巳", "辛卯"] },
+        "坎": { "inner": ["戊寅", "戊辰", "戊午"], "outer": ["戊申", "戊戌", "戊子"] },
+        "离": { "inner": ["己卯", "己丑", "己亥"], "outer": ["己酉", "己未", "己巳"] },
+        "艮": { "inner": ["丙辰", "丙午", "丙申"], "outer": ["丙戌", "丙子", "丙寅"] },
+        "兑": { "inner": ["丁巳", "丁卯", "丁丑"], "outer": ["丁亥", "丁酉", "丁未"] }
+      },
+      "verification": {
+        "independent_implementation": "liuyao-skills 与 fortune-liuyao-skill 对山水蒙输出一致：上=丙寅木、五=丙子水、四=丙戌土、三=戊午火、二=戊辰土、初=戊寅木（下卦坎内 戊寅/戊辰/戊午、上卦艮外 丙戌/丙子/丙寅）",
+        "corpus_original_page": "原页山水蒙各行干支与原页所印六亲一致；原页第 4 行以「妻财酉金 / 子孙戌土」并列写明伏神与飞神（corpus/figures/src-e6fc8612e955/page-003.md:18），与两家实现给出的「飞神子孙丙戌土 + 伏神妻财己酉金」一致"
+      },
+      "sourceLevel": "domain_rule"
+    },
+    "sixRelative": {
+      "rule": "以卦宫五行为「我」，比较爻支五行：同我=兄弟、生我=父母、我生=子孙、克我=官鬼、我克=妻财",
+      "evidence": "independent_implementation: 两家一致；corpus_original_page: 离宫属火，山水蒙四爻丙戌土=子孙、五爻丙子水=官鬼、初爻戊寅木=父母，与原页一致",
+      "sourceLevel": "domain_rule"
+    },
+    "sixSpirit": {
+      "rule": "按日干起青龙：甲乙起青龙、丙丁起朱雀、戊起勾陈、己起螣蛇、庚辛起白虎、壬癸起玄武；自初爻向上顺排",
+      "evidence": "independent_implementation: 两家对戊辰日输出一致（初=勾陈、二=螣蛇、三=白虎、四=玄武、五=青龙、上=朱雀）",
+      "sourceLevel": "domain_rule"
+    },
+    "hiddenLine": {
+      "rule": "用神不上卦（本卦六亲不现）时，从本宫纯卦取该六亲所临之爻为伏神，写在本卦对应爻位旁；该位本卦之爻称飞神",
+      "evidence": "independent_implementation: 两家对山水蒙均给出伏神妻财己酉金（四爻，飞神子孙丙戌土）",
+      "sourceLevel": "domain_rule"
+    },
+    "voidBranches": {
+      "rule": "由日柱干支定旬：旬首甲子起，旬空为该旬所缺两支",
+      "evidence": "independent_implementation: 戊辰日两家均得旬空戌亥",
+      "sourceLevel": "domain_rule"
+    },
+    "movingAndChanged": {
+      "rule": "6/9 为动爻；变卦 = 本卦动爻位取反；变爻纳甲按变卦对应经卦取表；动化回头生克按五行生克判定",
+      "evidence": "third_party_only（两家算法独立给出，未获原页逐例核对）",
+      "sourceLevel": "third_party_only"
+    }
+  },
+  "differences": {
+    "betweenUpstreams": [
+      { "field": "硬币约定", "liuyaoSkills": "0=反/1=正，三背=9老阳", "fortune": "正=3/反=2，三背=6老阴", "resolution": "本项目首版不实现随机/硬币起卦；将来实现时必须只采用一种并回显约定" },
+      { "field": "缺日柱/月建", "liuyaoSkills": "静默降级（六神默认从青龙起、旬空给空串）", "fortune": "两参数必填，缺一即抛错", "resolution": "本项目一律 unavailable + 原因（不接受静默默认）" },
+      { "field": "伏神强度等派生字段", "liuyaoSkills": "仅 hidden/hiddenCandidate 字面", "fortune": "另给 flyingToHiddenRelation 等关系字段", "resolution": "首版只出伏神/飞神的干支与六亲，派生关系留待阶段 4" }
+    ],
+    "corpusVsImplementations": [
+      { "case": "山水蒙（corpus/figures/src-e6fc8612e955/page-003.md:14-23）", "issue": "无差异：原页以「妻财酉金 / 子孙戌土」并列伏神与飞神，与两家实现一致", "action": "无需修正；本条保留为已核对的正面证据" }
+    ]
+  },
+  "notImplementedInThisPhase": [
+    "用神选取（需问题语境与流派规则，属阶段 4）",
+    "吉凶、应期、六神类象解读",
+    "真太阳时/地方时修正",
+    "农历月与节令月之外的其它历法体系",
+    "任何随机起卦（避免不可复现输入）"
+  ]
+}
