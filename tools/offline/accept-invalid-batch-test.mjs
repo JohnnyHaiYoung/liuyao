@@ -1,20 +1,28 @@
-// 复验门槛 2：隔离的混合批次（损坏的旧 DOC + 零字节 TXT + 正常 TXT）。
-// 要求：失败来源记为 failed 并写明原因、不生成清洗文件；正常来源照常完成；命令以非零退出码报告失败数。
+// 复验门槛 2：隔离混合批次（损坏的旧 DOC + 零字节 TXT + 正常 TXT）。
+//
+// 安全设计（2026-10-04 复验 P1-3 后重写）：脚本把 tools/ 复制到 storage/tmp 下的一个
+// 一次性项目根，所有导入、提取、清洗都发生在那个副本里；正式 corpus/、corpus/originals/、
+// corpus/manifest.jsonl 只被读取（复制 tools/），**绝不被写入或删除**。脚本结束时整棵临时
+// 项目根随删，因此也不存在"删除同名原件"的风险。
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const root = 'E:\\workspace-ai\\xuanxue\\liuyao';
-const sandbox = path.join(root, 'storage', 'tmp', 'accept-invalid-batch');
-const manifestPath = path.join(root, 'corpus', 'manifest.jsonl');
-const backupPath = path.join(root, 'storage', 'tmp', 'manifest-backup-batch.jsonl');
+const repo = 'E:\\workspace-ai\\xuanxue\\liuyao';
+const tempRootsRoot = path.join(repo, 'storage', 'tmp');
+const workRoot = path.join(tempRootsRoot, 'accept-invalid-batch-root');
+const sandbox = path.join(workRoot, 'sources');
 const sampleSetPath = path.join(sandbox, 'sample-set.json');
+const cliPath = path.join(workRoot, 'tools', 'corpus-cli.ts');
+const manifestPath = path.join(workRoot, 'corpus', 'manifest.jsonl');
 
-fs.rmSync(sandbox, { recursive: true, force: true });
+if (path.resolve(workRoot) === path.resolve(repo)) throw new Error('拒绝在正式项目根上运行隔离测试');
+if (!path.resolve(workRoot).startsWith(path.resolve(tempRootsRoot))) throw new Error('隔离测试目录必须位于 storage/tmp 下');
+
+fs.rmSync(workRoot, { recursive: true, force: true });
 fs.mkdirSync(sandbox, { recursive: true });
-fs.copyFileSync(manifestPath, backupPath);
+fs.cpSync(path.join(repo, 'tools'), path.join(workRoot, 'tools'), { recursive: true });
 
-// 1) 19 字节、扩展名 .doc 但不是 OLE2 的文件；2) 零字节 TXT；3) 正常 TXT
 fs.writeFileSync(path.join(sandbox, 'broken.doc'), 'not an OLE2 document', 'latin1');
 fs.writeFileSync(path.join(sandbox, 'empty.txt'), '');
 fs.writeFileSync(
@@ -42,7 +50,7 @@ fs.writeFileSync(
   'utf8',
 );
 
-const run = (args) => spawnSync('node', [path.join('tools', 'corpus-cli.ts'), ...args], { cwd: root, encoding: 'utf8', windowsHide: true });
+const run = (args) => spawnSync('node', [cliPath, ...args], { cwd: workRoot, encoding: 'utf8', windowsHide: true });
 const manifest = () =>
   fs
     .readFileSync(manifestPath, 'utf8')
@@ -56,19 +64,21 @@ try {
   const extract = run(['extract', '--all', '--sample-set', sampleSetPath]);
   run(['clean', '--all', '--sample-set', sampleSetPath]);
   const entries = manifest();
-  const broken = entries.find((item) => item.sourceRelativePathFromF === 'broken.doc');
-  const empty = entries.find((item) => item.sourceRelativePathFromF === 'empty.txt');
-  const ok = entries.find((item) => item.sourceRelativePathFromF === 'ok.txt');
-  const cleanedExists = (entry) => Boolean(entry?.processing.cleanedPath && fs.existsSync(path.join(root, entry.processing.cleanedPath)));
+  const find = (name) => entries.find((item) => item.sourceRelativePathFromF === name);
+  const broken = find('broken.doc');
+  const empty = find('empty.txt');
+  const ok = find('ok.txt');
+  const cleanedExists = (entry) =>
+    Boolean(entry?.processing.cleanedPath && fs.existsSync(path.join(workRoot, entry.processing.cleanedPath)));
 
   results.push({
-    name: '损坏 DOC 记为 failed 且写明原因',
+    name: '损坏 DOC 记为 failed 且写明原因、无清洗文件',
     pass:
       broken?.processing.status === 'failed' &&
       broken?.coverage.quality === 'failed' &&
       (broken?.coverage.issues.length ?? 0) >= 2 &&
       !cleanedExists(broken),
-    detail: `状态=${broken?.processing.status}/${broken?.coverage.quality} 原因条数=${broken?.coverage.issues.length ?? 0} 清洗文件=${broken?.processing.cleanedPath ?? '无'}｜原因：${(broken?.coverage.issues[0] ?? '').slice(0, 70)}`,
+    detail: `状态=${broken?.processing.status}/${broken?.coverage.quality} 原因条数=${broken?.coverage.issues.length ?? 0} 清洗文件=${broken?.processing.cleanedPath ?? '无'}｜原因：${(broken?.coverage.issues[0] ?? '').slice(0, 60)}`,
   });
   results.push({
     name: '零字节 TXT 记为 failed 且无清洗文件',
@@ -80,31 +90,19 @@ try {
     pass: ok?.processing.status === 'processed' && ok?.coverage.quality === 'usable' && cleanedExists(ok),
     detail: `状态=${ok?.processing.status}/${ok?.coverage.quality} 清洗文件=${ok?.processing.cleanedPath ?? '无'}`,
   });
-  const failedListed = /提取失败 1 个来源/.test(`${extract.stdout ?? ''}${extract.stderr ?? ''}`);
+  const output = `${extract.stdout ?? ''}${extract.stderr ?? ''}`;
   results.push({
     name: '批量以非零退出码并汇总失败数',
-    pass: extract.status === 1 && failedListed,
-    detail: `exit=${extract.status}；汇总行${failedListed ? '已输出' : '缺失'}`,
+    pass: extract.status === 1 && /提取失败 1 个来源/.test(output),
+    detail: `exit=${extract.status}；汇总行${/提取失败 1 个来源/.test(output) ? '已输出' : '缺失'}`,
   });
 
+  console.log(`隔离项目根：${path.relative(repo, workRoot)}（副本，正式 corpus/ 未被访问）`);
   console.log('\n=== 混合批次复验结果 ===');
   for (const item of results) console.log(`  [${item.pass ? '通过' : '不通过'}] ${item.name}\n         ${item.detail}`);
   console.log(`\n合计：${results.filter((item) => item.pass).length}/${results.length} 通过`);
   process.exitCode = results.every((item) => item.pass) ? 0 : 1;
 } finally {
-  fs.copyFileSync(backupPath, manifestPath);
-  for (const name of ['broken.doc', 'empty.txt', 'ok.txt']) {
-    fs.rmSync(path.join(root, 'corpus', 'originals', name), { force: true });
-  }
-  for (const dir of ['extracted', 'cleaned']) {
-    const target = path.join(root, 'corpus', dir);
-    for (const file of fs.readdirSync(target)) {
-      const head = fs.readFileSync(path.join(target, file), 'utf8').slice(0, 800);
-      if (head.includes('accept-invalid-batch') || head.includes('broken.doc') || head.includes('ok.txt') || head.includes('empty.txt')) {
-        fs.rmSync(path.join(target, file), { force: true });
-      }
-    }
-  }
-  fs.rmSync(sandbox, { recursive: true, force: true });
-  console.log(`已恢复 manifest（${fs.readFileSync(manifestPath, 'utf8').trim().split('\n').length} 个来源）并清除测试产物`);
+  fs.rmSync(workRoot, { recursive: true, force: true });
+  console.log('已删除隔离项目根（正式资料未改动）');
 }

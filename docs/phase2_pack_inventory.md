@@ -1,8 +1,8 @@
 # 第二阶段资料交接包清单
 
 - 归档：`dist/liuyao-phase2-corpus-20261004.zip`
-- 归档 SHA-256：`fff93703ddd8ca0befa6c119bb13588f35a064dc6c45948a30da7b270ac0b4d3`
-- 归档字节数：8,760,381
+- 归档 SHA-256：`139912059607acc04cea8996eff0e5161e9a6dd1f2f8ad40cbf8acd7052f5c45`
+- 归档字节数：8,761,241
 - 内含文件：125（含包内 `PACK-MANIFEST.txt`）
 - 生成命令：`node tools/corpus-cli.ts pack --out dist/liuyao-phase2-corpus-20261004.zip`
 - 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核
@@ -88,7 +88,7 @@ a82ffb59ff46b5a28ff430b1c202501a7185345c62094b90bd6764cb170d5fd1       2090  cor
 38c7aae5240a8c65990e4d732d99b736e8ea0298d2c8088e5eb84a8f76622a14       2624  corpus/reports/spotcheck/src-25fcddea758b.json
 2365f60bfb765d12dfba1d6ae2261d3cc2d415ff5dafa66eb1d09d71bdb078c7       3025  corpus/reports/spotcheck/src-3f8243c07930.json
 1be52f4b17e21422e1ce230a415bf16d7a556e17c4fac725865357b63ed98df7       1979  corpus/reports/spotcheck/src-946795472cd6.json
-8442694aa365acdddc422b1001d467e672f4595af1f900a2ad0ee2d6dd15115e       5038  corpus/reports/spotcheck/src-e6fc8612e955.json
+2b3934155ad3fc0a5013b31b8448a983dc8f0381200818ef90c3114dcd61bf15       4989  corpus/reports/spotcheck/src-e6fc8612e955.json
 20fe8667703c114447474d5bb1e30c92dd10c02bcd7a7e57e2756e83003b47d6       2807  corpus/reports/spotcheck/src-f3f838d501b1.json
 b3deeb40958c1813680f2f89c2dab4d85ab91332880259a733977cbe2d5b02fb       3816  corpus/reports/src-08862b06aea9.md
 7de34984220a35979e8990f8f1ec77296d4575dd7c4dadb928f8829857709398       4204  corpus/reports/src-25fcddea758b.md
@@ -97,10 +97,10 @@ b3deeb40958c1813680f2f89c2dab4d85ab91332880259a733977cbe2d5b02fb       3816  cor
 f914605f9591495a8885c03ef760050393178a33436b3f4a9a896f8826e37f0a       4616  corpus/reports/src-3f8243c07930.md
 781cdb6aabf60e1a57455684081b3da39a6e7fa20d7e854481f8dbb76dd274da       1416  corpus/reports/src-946795472cd6-ifilter-crosscheck.md
 2fd200470be31776c48cc38996dd897ec088521c42ad87c677627f6624f2b738       3641  corpus/reports/src-946795472cd6.md
-20dc85aecc16d79885aeac29ffd5b7e61322545dd496d4932010eb0810fc2172       7219  corpus/reports/src-e6fc8612e955.md
+22ce3a8d8612b198672f4483525070a4bfcda42837a0e4ae1b983c38f5c983ef       8238  corpus/reports/src-e6fc8612e955.md
 69888e3753f84297e7b76f31fd2b70d088276c6c3dcee29920c7d8a875354842       5375  corpus/reports/src-f3f838d501b1.md
 645d957f4488c3c3f23a4c8f7ce3f195061b59532ea106a19c2fe00511df3cf5       7918  docs/phase2_acceptance_2026-10-02.md
-1ef249cd16d004eccef1e4ace9c88017ce2410ee857d2db517bc67e3869b6bc6      28468  docs/phase2_delivery.md
+bb302d7b8dfabfa5db62c0183a0faa016530934593eb702966b5bcefe1f58f36      30727  docs/phase2_delivery.md
 15ab8e194120f073ce74c3ff69e8ce48bb5dad59807e0099a4ab1524536a22f7      12921  docs/phase2_development_spec.md
 b4956a9e511c5de453e5ac1275219d181d39898f24dfec6e3a7ecfcf18890f81       3431  README.md
 f5e6a6ce68633ae1eb305ee2fee46daf0f0ece5fd993899df17af07844def9d7       6623  tools/build_source_inventory.py
@@ -109,8 +109,8 @@ d8897397e42e5b46b2de54b136015ea0c919ba898418a65bce43e9f372945711      10278  too
 8bd69f967e29d862080a4cb72fedee1e2b1c97155621a8897070098bf10877ef      16245  tools/lib/office.ts
 a35f3ca85bbc38971d103f9a352121a3df083fd56d2253d49064b9f709960f78      21739  tools/lib/pdf.ts
 3f8faf0713536d63b3ee8cfeda114ceadae89a7874ad202db2c815d119587906       2926  tools/lib/zip.ts
-bc6d4275d8c4a39657b1f3fd87314d1033e3182766f8dff86736b3784b5f8020       5411  tools/offline/accept-invalid-batch-test.mjs
-627e2b40edbdf09268efac8016bf9d616298b15e3083b1c541112a91eb1a32f9       7247  tools/offline/accept-isolation-test.mjs
+2468e9e0194d0057e52a218536c3267116d8efc861e568698b3bad07d27a962c       5328  tools/offline/accept-invalid-batch-test.mjs
+d6ee3d8b46deaf1ebbe9bf2c822539acb66963df6fd6c4850f73d4d7ae4a768f       4892  tools/offline/accept-isolation-test.mjs
 e10d598575f630cb2ff76f3fe356de56ab834aa84e7160ada56079e3171eef8b       2517  tools/offline/accept-unpack-test.mjs
 8bd5327d320aee4e4e80d3fb974126843d3e91fb8dc96bd346958e25ed29dd05       7652  tools/offline/doc-crosscheck.mjs
 8507c54bb16db937eff0748ad58d9fc52829b83eaf5197d016d36b141cbd3600       1763  tools/offline/docx-capacity-check.mjs
