@@ -1,0 +1,12 @@
+﻿{
+  "name": "liuyao-paipan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "六爻确定性排盘模块（阶段 3）：输入六次爻值与时间口径，输出结构化盘面 JSON",
+  "engines": { "node": ">=22.0.0" },
+  "dependencies": {
+    "lunar-typescript": "1.8.6",
+    "solarlunar": "3.1.0"
+  }
+}

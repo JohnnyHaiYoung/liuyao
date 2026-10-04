@@ -19,6 +19,9 @@ __pycache__/
 /app/out/
 /app/*.tsbuildinfo
 
+# 阶段 3 排盘模块：依赖按 paipan/package-lock.json 重装，不入库
+/paipan/node_modules/
+
 # Local scratch space used while probing the toolchain
 /.scratch-probe/
 /.npm-cache/
