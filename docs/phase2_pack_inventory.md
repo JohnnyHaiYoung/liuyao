@@ -1,9 +1,9 @@
 # 第二阶段资料交接包清单
 
 - 归档：`dist/liuyao-phase2-corpus-20261004.zip`
-- 归档 SHA-256：`28cf4333e2a978d3384c34e6f31316de77e39f287e497eeb5c69cdd758394639`
-- 归档字节数：8,753,659
-- 内含文件：123（含包内 `PACK-MANIFEST.txt`）
+- 归档 SHA-256：`fff93703ddd8ca0befa6c119bb13588f35a064dc6c45948a30da7b270ac0b4d3`
+- 归档字节数：8,760,381
+- 内含文件：125（含包内 `PACK-MANIFEST.txt`）
 - 生成命令：`node tools/corpus-cli.ts pack --out dist/liuyao-phase2-corpus-20261004.zip`
 - 生成方式：固定时间戳；输入不变则归档字节一致，可用 SHA-256 复核
 
@@ -39,12 +39,12 @@ ed4e39a8080a8a752c5cbfa69b1c46f3a730c5a099cf93cc0566a6065c026fe4     287104  cor
 6c0b89779c9c6a8d12fda3acf8fe79e5f8259c8d0fb94bac84d95f4cc17a1a15     385062  corpus/assets/src-f3f838d501b1/page-003.jpg
 8e1779373889cf3bc2c7db55e81061627fd2950ab3a9bd3ea8170275776066a8     330587  corpus/assets/src-f3f838d501b1/page-004.jpg
 c8eb52d55e1d643dff9ab5b0819658650d23e4d83de8f1c3f017913efb69302c     367721  corpus/assets/src-f3f838d501b1/page-005.jpg
-b41854051e6a5e10731f79cce34a2fabd183e9d92d63ddfad08ee1253da6cb61       1092  corpus/cleaned/README.md
+cb5c0d3df0351e4fbef99b578c7cef8a732f116a06cd4627d9a45f5426ffc36f       1154  corpus/cleaned/README.md
 0588cb1cab31e2517cb908ef780ab381f2494fc4c1c2c561ca6236a3b8a65b48       5759  corpus/cleaned/src-08862b06aea9.md
 f36d52d20f1c215536bd48c90cbbe8cd9c0961ae3921fd8505399433b4a11657     140901  corpus/cleaned/src-25fcddea758b.md
 3612e7b39b733d4f17eb2f4520cfb0334da0d61c36a2515f2f8c8e51e1b56eb7     122850  corpus/cleaned/src-3f8243c07930.md
 fbc5079e6e58db1aa604071ad7e5e384b3317570abc9662e61cb812adfe38fcd      12916  corpus/cleaned/src-946795472cd6.md
-eaa84ca137a97863d3335d07091994a2f4591f3d3c97c5bf5f1df9eb19d946b3     115021  corpus/cleaned/src-e6fc8612e955.md
+0256908ce167d6a199172870b98f9b966f57c1c5d01055f919bf12f134bf1440     115015  corpus/cleaned/src-e6fc8612e955.md
 a3e8fc524e08a77e5acfe080276821c4571d708d02a430a5549fc5a31b99181f      20070  corpus/cleaned/src-f3f838d501b1.md
 cf1f4c7844f71d7486fd5534d1d982b72a1130599135460d4757c9aa32f869ee        224  corpus/extracted/README.md
 278457125f822937563a67ef9660ba9ac5b8e82e6c54b4c4d7d4334d9ff562c3       5264  corpus/extracted/src-08862b06aea9.txt
@@ -71,7 +71,7 @@ aa4a883ddeea991efbcb0f53f548e470159a43c3bdad7dd33894091e322ef101       4081  cor
 fd8ab4bd3e2165679bd55ab56d5ffebd666279bcd48f474104ce464d0b18610a       4562  corpus/figures/src-e6fc8612e955/page-018.md
 1cac5da4f1fcdd4a4dfe6fe6e93fe2e4aa6693668686a146c4964e412803316d       3915  corpus/figures/src-e6fc8612e955/page-019.md
 04290b7c966c60b5fc3ea335c097b7842140b8837e5b8a7e01a44617b367598f       2197  corpus/figures/src-e6fc8612e955/page-020.md
-df3b4e2ee70004868bfb892719e3e5a25b53f58685f95e4aca84a1e948d2042d       3823  corpus/figures/src-e6fc8612e955/page-021.md
+1469f411d6c63536cc111522cdb64deab1ffac80e877f33dc6c6d4cab51d852c       4246  corpus/figures/src-e6fc8612e955/page-021.md
 934392f171ced7a5bcad0e7106f8266af5658e3f1588989e9ab3f5076d20dd0c       3694  corpus/figures/src-e6fc8612e955/page-022.md
 9aced5364a0949625884d7832d31fb46f04e6c127440835b2e7fe3908cb69629       4914  corpus/figures/src-e6fc8612e955/README.md
 72d13b269ed62bfab9e32b015c40b53ce291de3585d176d7ce4c613f87551f41      11811  corpus/manifest.jsonl
@@ -88,7 +88,7 @@ a82ffb59ff46b5a28ff430b1c202501a7185345c62094b90bd6764cb170d5fd1       2090  cor
 38c7aae5240a8c65990e4d732d99b736e8ea0298d2c8088e5eb84a8f76622a14       2624  corpus/reports/spotcheck/src-25fcddea758b.json
 2365f60bfb765d12dfba1d6ae2261d3cc2d415ff5dafa66eb1d09d71bdb078c7       3025  corpus/reports/spotcheck/src-3f8243c07930.json
 1be52f4b17e21422e1ce230a415bf16d7a556e17c4fac725865357b63ed98df7       1979  corpus/reports/spotcheck/src-946795472cd6.json
-fea21bb601018cd6c0eb80e1cfce01d7b21803e0120591578d24dbed891024d0       3903  corpus/reports/spotcheck/src-e6fc8612e955.json
+8442694aa365acdddc422b1001d467e672f4595af1f900a2ad0ee2d6dd15115e       5038  corpus/reports/spotcheck/src-e6fc8612e955.json
 20fe8667703c114447474d5bb1e30c92dd10c02bcd7a7e57e2756e83003b47d6       2807  corpus/reports/spotcheck/src-f3f838d501b1.json
 b3deeb40958c1813680f2f89c2dab4d85ab91332880259a733977cbe2d5b02fb       3816  corpus/reports/src-08862b06aea9.md
 7de34984220a35979e8990f8f1ec77296d4575dd7c4dadb928f8829857709398       4204  corpus/reports/src-25fcddea758b.md
@@ -100,16 +100,18 @@ f914605f9591495a8885c03ef760050393178a33436b3f4a9a896f8826e37f0a       4616  cor
 20dc85aecc16d79885aeac29ffd5b7e61322545dd496d4932010eb0810fc2172       7219  corpus/reports/src-e6fc8612e955.md
 69888e3753f84297e7b76f31fd2b70d088276c6c3dcee29920c7d8a875354842       5375  corpus/reports/src-f3f838d501b1.md
 645d957f4488c3c3f23a4c8f7ce3f195061b59532ea106a19c2fe00511df3cf5       7918  docs/phase2_acceptance_2026-10-02.md
-f0f783d89ec5cb25e16ac91f697a52f2bec8df08a29547eb8eea0ad29ecfa39c      24949  docs/phase2_delivery.md
+1ef249cd16d004eccef1e4ace9c88017ce2410ee857d2db517bc67e3869b6bc6      28468  docs/phase2_delivery.md
 15ab8e194120f073ce74c3ff69e8ce48bb5dad59807e0099a4ab1524536a22f7      12921  docs/phase2_development_spec.md
 b4956a9e511c5de453e5ac1275219d181d39898f24dfec6e3a7ecfcf18890f81       3431  README.md
 f5e6a6ce68633ae1eb305ee2fee46daf0f0ece5fd993899df17af07844def9d7       6623  tools/build_source_inventory.py
-73519286434dc76cee6435f7501eb6fdbf0aef1ff44c648b1041c3a3236fa488      65986  tools/corpus-cli.ts
+ce319ad1581916a1dceb4f54ef6103f14040ea53969a5b26c7dc10b35c605848      67690  tools/corpus-cli.ts
 d8897397e42e5b46b2de54b136015ea0c919ba898418a65bce43e9f372945711      10278  tools/lib/common.ts
 8bd69f967e29d862080a4cb72fedee1e2b1c97155621a8897070098bf10877ef      16245  tools/lib/office.ts
 a35f3ca85bbc38971d103f9a352121a3df083fd56d2253d49064b9f709960f78      21739  tools/lib/pdf.ts
 3f8faf0713536d63b3ee8cfeda114ceadae89a7874ad202db2c815d119587906       2926  tools/lib/zip.ts
+bc6d4275d8c4a39657b1f3fd87314d1033e3182766f8dff86736b3784b5f8020       5411  tools/offline/accept-invalid-batch-test.mjs
 627e2b40edbdf09268efac8016bf9d616298b15e3083b1c541112a91eb1a32f9       7247  tools/offline/accept-isolation-test.mjs
+e10d598575f630cb2ff76f3fe356de56ab834aa84e7160ada56079e3171eef8b       2517  tools/offline/accept-unpack-test.mjs
 8bd5327d320aee4e4e80d3fb974126843d3e91fb8dc96bd346958e25ed29dd05       7652  tools/offline/doc-crosscheck.mjs
 8507c54bb16db937eff0748ad58d9fc52829b83eaf5197d016d36b141cbd3600       1763  tools/offline/docx-capacity-check.mjs
 259ea5ac1741d3af3fa1e064cac07ebd3403abcb97c3932d5814ad6686c8b8ca       6742  tools/offline/ifilter-crosscheck.mjs
@@ -124,7 +126,7 @@ d1798f0b8d02f6f222a501a580fa73bd6a3b0732ba3a3eb86b358e3b5599c317       6117  too
 07c8dd523ecc420ae6471c9f6ff429c28aab0e409c93c4ecf59d70202830d84d       3178  wiki/comparisons/meihua-vs-liuyao.md
 73e4903a9d2bf8c3a4cd3ed2d2cf92cd2421c12d7e95418057c9e1802be9fae8       4202  wiki/concepts/yongshen.md
 13408f01f65f61745d539ead439c0aaa26b672b03ad7297e7bbaf8779a903b9d       2896  wiki/index.md
-14a63da87d3f90c77add4938e9241bc1c0442631afa2e934e3dbade95aa9e412       4488  wiki/log.md
+47210d499203bdf5af24014f57063ea63121c9a31da9d65fd8aadbe9e25c9ffc       4761  wiki/log.md
 eca9273f4481fa85f723b17c7b06f94772aa5394f3c2fb92bee6bb55353a7aac       2598  wiki/schema.md
 792b354dba7a5dc0adf93a3c8451aa05b9e976961a3a0c3f47d7162f4890f5ec       2923  wiki/sources/src-08862b06aea9.md
 9cec3a333ac144813fcb900ee998e69e9081614b6e0bc767cda1240c6f2804a6       3000  wiki/sources/src-25fcddea758b.md

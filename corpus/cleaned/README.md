@@ -12,4 +12,4 @@
 node tools/corpus-cli.ts clean --all
 ```
 
-这些文件随项目打包；完整交接包用 `node tools/corpus-cli.ts pack` 生成，清单见 [docs/phase2_pack_inventory.md](../../docs/phase2_pack_inventory.md)。
+这些文件随项目打包；完整交接包用 `node tools/corpus-cli.ts pack` 生成，包内逐文件哈希见归档中的 `PACK-MANIFEST.txt`，打包与校验说明见 [docs/phase2_delivery.md](../../docs/phase2_delivery.md)。

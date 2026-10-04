@@ -167,7 +167,7 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 | P1-2 卦图/图文状态不符 | 文字层 PDF 生成**全部 23 页**原页图并随包；清洗文本按页嵌入 `![第 N 页原页图](../assets/...)`；含 `██` 的 **20 页**在页内标注"本页卦例不作为默认规则"；该来源质量由 `usable` 降为 `needs_review`（来源页、索引、概念页同步）；扫描件 5 页图同样按页嵌入 | `verify --verbose` 中 20 条 `含卦图/爻位占位字符，已嵌原页图并在页内标注` 全部通过；无原页图时该检查判 `fail` |
 | P1-3 同哈希别名丢失 | `import` 在循环内实时更新哈希索引；同哈希的后续路径一律并入 `aliasSourcePaths`，主路径固定为首次导入路径；别名不再重复复制原件（哈希相同） | 隔离复验脚本 `tools/offline/accept-isolation-test.mjs`：同批（a→b）、分批（b 再来）、反向分批（a 先 b 后）**3/3 通过**，均为 `主路径=copy-a.txt 别名=["copy-b.txt"]` |
 | P1-4 空提取误判 usable | 提取正文非空白字符 < 20 → `processing.status=failed`、`coverage.quality=failed`，写入原因与重试指引；`clean` 拒绝为 `failed` 来源生成清洗文件；`verify` 新增"状态与产物一致性"检查 | 隔离复验：零字节文件得到 `failed/failed`、无清洗文件、原因已记录（**1/1 通过**）；`verify` 对 6 个来源的正文非空检查全部通过 |
-| P1-5 交接包不自包含 | 新增 `node tools/corpus-cli.ts pack [--out <zip>]`：零依赖 ZIP 写入器、固定时间戳（输入不变则归档字节一致）、包内 `PACK-MANIFEST.txt` 列出每个文件的 SHA-256 与字节数；同时生成 [phase2_pack_inventory.md](phase2_pack_inventory.md)；`.gitignore` 改为只排除 `corpus/originals/`（体积与第三方版权）与 `storage/`、`dist/` | 归档 `dist/liuyao-phase2-corpus-20261002.zip`：92 个文件、8,677,232 字节，SHA-256 见清单文件；manifest、extracted、cleaned、assets、reports 现已随仓库交付 |
+| P1-5 交接包不自包含 | 新增 `node tools/corpus-cli.ts pack [--out <zip>]`：零依赖 ZIP 写入器、固定时间戳（输入不变则归档字节一致）、包内 `PACK-MANIFEST.txt` 列出每个文件的 SHA-256 与字节数；归档自身的 SHA-256 记录在**工作目录**的 `docs/phase2_pack_inventory.md`（自引用文件，故意不进归档，因此 `wiki/`、`corpus/cleaned/` 的链接一律不指向它）；`.gitignore` 改为只排除 `corpus/originals/`（体积与第三方版权）与 `storage/`、`dist/` | 归档 `dist/liuyao-phase2-corpus-<日期>.zip`（文件名与 SHA-256 随打包日期变化，以 `docs/phase2_pack_inventory.md` 与归档内 `PACK-MANIFEST.txt` 为准）；manifest、extracted、cleaned、assets、reports 现已随仓库交付 |
 | 内容问题 1：DOC 分片数自相矛盾 | 来源页改为"分片表 31 片"（与 manifest/report 一致） | 见 `wiki/sources/src-3f8243c07930.md` 与 `corpus/reports/spotcheck/src-3f8243c07930.json` |
 | 内容问题 2：对照页夸大冲突 | 标题与状态改为"表面分歧、前提不同"，并明确两份来源关注**不同环节** | 见 `wiki/comparisons/meihua-vs-liuyao.md` |
 | 内容问题 3：段落统计口径混淆 | 报告与 manifest 统一为"提取器分块数"与"清洗段落锚点数"两个字段，并说明差异原因；锚点数以清洗文件中的 `<!-- ¶NNNN -->` 计数为准 | 见各 `corpus/reports/src-*.md` 第 4 节 |
@@ -177,10 +177,10 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 
 ## 13. 复验门槛 2 与旧 DOC 独立对照的补充（2026-10-02 二次修复）
 
-- **复验门槛 2（文字层 PDF 卦图页）**：人工打开原页图核对了**第 3 页**（例 30 山水蒙、例 31 泽风大过）与**第 20 页**（例 53 山天大畜 → 天泽履），并把六爻阴阳、六亲纳甲、六神、世应、动符转写为结构化表格：`corpus/figures/src-e6fc8612e955/page-003.md`、`page-020.md`。清洗文本在对应页内自动加入转写链接与"本页卦例不作为默认规则"标注；`verify` 新增"卦盘转写必须含 source_id 且原页图链接有效"检查。20 个含 `██` 的页中，**第 3、20 页已转写，其余 18 页仍为"原页图 + 页内标注"**（如实写在来源页）。
+- **复验门槛 2（文字层 PDF 卦图页）**：人工打开原页图核对并转写卦盘为结构化表格（`corpus/figures/src-e6fc8612e955/page-NNN.md`）。最初完成第 3、20 页；**后续已扩展到全部 20 个含 `██` 的卦图页（2026-10-02 起分批完成，最后一轮提交 `8a80705`）**，进度与逐页内容见 [corpus/figures/src-e6fc8612e955/README.md](../corpus/figures/src-e6fc8612e955/README.md)。清洗文本在每页内自动加入转写链接与"本页卦例不作为默认规则"标注；`verify` 检查"卦盘转写必须含 source_id 且原页图链接有效"。该索引同时汇总了转写中发现的 5 处原页疑点（两处方块图与卦名结构不符、两处疑为错字、一处跨页表爻位对齐未复核）。
 - **旧 DOC 的第二种解析方式**：本机 Word COM 此前一直挂起，本轮定位到两个具体原因并绕开——① `Start-Process` 被 `NO_PROXY`/`no_proxy` 大小写冲突阻断（改用同进程 STA runspace + 超时）；② Word 类型库注册损坏导致 `TYPE_E_CANTLOADLIBRARY`（改用 `InvokeMember` 纯晚绑定）；③ Word 的 `wdFormatUnicodeText` 在本机实际写出 GB18030（改为原样保存字节 + Node 侧编码嗅探）。结果见 [src-3f8243c07930-word-crosscheck.md](../corpus/reports/src-3f8243c07930-word-crosscheck.md)：Word 独立渲染自报 **51 页 / 32431 词 / 860 段**，**汉字数 26372 与自实现解析完全一致**，自实现行 48.6% 能在 Word 文本中找到逐字一致行（差异为换行与域代码写法）。**版式仍未验证**（本对照只比文字），这一点在报告与来源页中写明。
 
-新的交接包：`dist/liuyao-phase2-corpus-20261002.zip`，99 个文件、8,700,946 字节，SHA-256 见 [phase2_pack_inventory.md](phase2_pack_inventory.md)（连续两次打包字节一致）。
+交接包以最新一次 `pack` 的结果为准（文件名含打包日期，SHA-256 记录在工作目录 `docs/phase2_pack_inventory.md`，包内逐文件哈希见 `PACK-MANIFEST.txt`；连续两次打包字节一致）。
 
 ## 14. DOCX / 旧 DOC 的第二条独立路径（Windows/Office 自带 IFilter）
 
@@ -197,3 +197,16 @@ F 盘不可访问时，`verify` 会把 6 条"F 盘原件一致"的检查降级�
 - **过程中的一个真实教训（已修）**：IFilter 首版实现复用了同一个 `StringBuilder`，只清 `Length` 而不换缓冲，导致追加了上一次缓冲的残留与垃圾字符，把 DOCX 的 2,261 汉字虚报成 51,461（23 倍）。修正为每次调用分配新缓冲后即为上表数值。**该 51,461 的数字在任何报告里都不作为证据使用。**
 - PDF 的独立核对仍依靠：渲染原页图后的人工目视（第 1、2、3、20 页）与既有盘点的字符量吻合（第 1 页 749 字符 vs 盘点 752 非空白字符）。
 - 工具：`tools/offline/ifilter-extract.ps1`（提取）、`tools/offline/ifilter-crosscheck.mjs`（对照与重复检测）、`tools/offline/docx-capacity-check.mjs`（容量核算）、`tools/offline/word-probe.ps1`、`word-convert-late.ps1`、`doc-crosscheck.mjs`。这些只用于**开发期核对**，不进运行时依赖。
+
+## 15. 第二阶段独立复验（2026-10-04）阻断项修复
+
+复验记录：[phase2_reacceptance_2026-10-04.md](phase2_reacceptance_2026-10-04.md)（结论"暂不通过"，2 项 P1 + 2 项内容问题）。逐项修复与证据：
+
+| 项 | 原因 | 修复 | 复验证据 |
+| --- | --- | --- | --- |
+| P1-1 解包后校验失败（2 条链接） | `pack` 为避开"归档哈希自引用"排除了 `docs/phase2_pack_inventory.md`，但 `wiki/log.md` 与 `corpus/cleaned/README.md` 却链向它 → 解包后必失效 | 两处链接改指包内存在的 `docs/phase2_delivery.md`（并在文中说明该清单属自引用文件、故意不进归档）；交付说明中指向清单的链接改为代码字体而非链接 | 用 `tools/offline/accept-unpack-test.mjs` 解包**实际归档**到新目录、把副本 `sourceRoot` 改为不存在的 `Z:\absent-liuyao-source` 后运行 `verify`：**96 通过 / 6 条 F 盘不可访问警告 / 0 失败**（退出码 0） |
+| P1-2 损坏旧 DOC 中断批量、失败无记录 | `commandExtract` 未做逐来源异常收敛：解析器抛异常直接终止整批，manifest 停在 `pending` 且 `issues=[]` | 每个来源的提取包在 try/catch 内：异常 → `status=failed`、`quality=failed`、写入"解析失败：<原因>"与重试建议（签名不符时提示先确认真实格式）、不写提取/清洗文件；批量继续处理其余来源；结束时打印失败来源汇总并置非零退出码 | `tools/offline/accept-invalid-batch-test.mjs`（坏 DOC + 零字节 TXT + 正常 TXT 混合批次）：**4/4 通过**——坏 DOC `failed/failed` 带 2 条原因、无清洗文件；空 TXT `failed` 无清洗文件；正常 TXT `processed/usable` 且有清洗文件；`extract --all` 退出码 1 并输出"提取失败 N 个来源"汇总 |
+| 内容问题 1：报告/交付说明滞后 | 来源报告与交付说明仍写"仅导出第 1–2 页图""只转写第 3、20 页""归档 92 文件"等旧状态 | `corpus/reports/spotcheck/src-e6fc8612e955.json` 更新为"23 页图全部随包 + 20 页卦盘全部转写 + 5 处原页疑点"，并重跑 `report`；交付说明第 13 节与 P1-5 行同步为最新状态，归档文件名不再写死日期 | 见重新生成的 `corpus/reports/src-e6fc8612e955.md` 与本文档第 12–14 节 |
+| 内容问题 2：第 21 页「逢中」缺校勘依据 | 转写页写"原页文字，与提取文本一致"，但提取文本来自 OCR，不能作为独立核对 | `corpus/figures/src-e6fc8612e955/page-021.md` 改为"原页文字；OCR 文字层仅作参照，**不是**独立核对"，并加校勘说明：保留原页字形「逢中」、给出意见"疑为逢冲"、注明判定依据是目视原页图而非 OCR 比对 | 见该文件第一节的校勘说明；该来源整体维持 `needs_review` |
+
+修复后的最终状态：工作目录 `verify --verbose` → **102 项通过、0 警告、0 失败**；重新打包的归档（文件名含打包日期，SHA-256 见工作目录 `docs/phase2_pack_inventory.md`）经上表方式解包复验通过。新增的两个复验脚本 `tools/offline/accept-unpack-test.mjs`、`tools/offline/accept-invalid-batch-test.mjs` 均可重复执行。

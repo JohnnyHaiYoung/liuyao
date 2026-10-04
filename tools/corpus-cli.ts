@@ -437,18 +437,42 @@ function extractPdfText(source: ManifestSource): ExtractOutcome {
 }
 
 function commandExtract(options: Map<string, string[]>): void {
+  const failures: string[] = [];
   for (const source of selectedSources(options)) {
     const absolute = fromProjectRelative(source.originalRelativePath);
-    const outcome =
-      source.format === 'txt'
-        ? extractTxt(source)
-        : source.format === 'docx'
-          ? extractDocx(source)
-          : source.format === 'doc'
-            ? extractDoc(source)
-            : source.format === 'pdf'
-              ? extractPdfText(source)
-              : null;
+    let outcome: ExtractOutcome | null = null;
+    try {
+      outcome =
+        source.format === 'txt'
+          ? extractTxt(source)
+          : source.format === 'docx'
+            ? extractDocx(source)
+            : source.format === 'doc'
+              ? extractDoc(source)
+              : source.format === 'pdf'
+                ? extractPdfText(source)
+                : null;
+    } catch (error) {
+      // 单个来源的解析异常必须收敛成 failed 记录：整批不能中断，也不能留下无原因的 pending。
+      const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      const looksLikeWrongFormat = source.format === 'doc' && /OLE2|复合文档/.test(reason);
+      source.processing.status = 'failed';
+      source.processing.processedAt = nowIso();
+      source.coverage.quality = 'failed';
+      source.coverage.processedUnits = '无（提取失败）';
+      source.coverage.unprocessedUnits = '全文（提取失败）';
+      source.coverage.issues = [
+        `解析失败：${reason}`,
+        looksLikeWrongFormat
+          ? '该文件签名不是 OLE2 复合文档（旧版 DOC），扩展名与真实格式可能不符（如实为 RTF/HTML/纯文本）。' +
+            '建议先用文件签名确认格式，再按对应格式重新登记或改用其它工具转换。'
+          : '建议检查文件是否损坏、被截断或属于本工具链不支持的变体，然后重试或改用其它工具转换。',
+      ];
+      upsertManifest(source);
+      failures.push(`${source.source_id}（${source.sourceRelativePathFromF}）：${reason}`);
+      console.error(`  ${source.source_id}  解析失败，已记为 failed：${reason}`);
+      continue;
+    }
     if (!outcome) {
       console.log(`  ${source.source_id}（${source.format}）跳过：请用 ocr 子命令处理扫描件`);
       continue;
@@ -498,6 +522,11 @@ function commandExtract(options: Map<string, string[]>): void {
       `  ${source.source_id}  ${source.format.padEnd(8)} ${stats.chars} 字符（汉字 ${stats.cjkChars}）质量=${outcome.quality}` +
         (outcome.issues.length > 0 ? ` 问题 ${outcome.issues.length} 条` : ''),
     );
+  }
+  if (failures.length > 0) {
+    console.error(`\n提取失败 ${failures.length} 个来源（其余来源已继续处理并写入 manifest）：`);
+    for (const item of failures) console.error(`  - ${item}`);
+    process.exitCode = 1;
   }
 }
 
