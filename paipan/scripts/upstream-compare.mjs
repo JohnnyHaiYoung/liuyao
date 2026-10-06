@@ -120,6 +120,8 @@ function runPython(lines, day, month) {
 }
 
 const sortBranches = (value) => (typeof value === 'string' ? [...value].sort().join('') : null);
+/** 卦宫名归一：Python 侧带五行后缀（如「离(火)」），统一取宫名。 */
+const palaceName = (value) => (typeof value === 'string' ? value.replace(/\(.*\)$/, '').replace(/宫$/, '').trim() : null);
 
 for (const { lines, day, month } of inputs) {
   const label = `[${lines.join(' ')}] ${day}日 ${month}月`;
@@ -142,6 +144,8 @@ for (const { lines, day, month } of inputs) {
 
   const pairs = [
     ['旬空', sortBranches((mine.chart.voidBranches ?? []).join('')), sortBranches(js.voidBranches), sortBranches(py.voidBranches)],
+    // 勘误 1（第三阶段最终验收）：卦宫此前只打印、未机器比较，这里补上自动比较。
+    ['卦宫', palaceName(mine.chart.palace.name), palaceName(js.palace), palaceName(py.palace)],
   ];
   for (const [name, mineValue, jsValue, pyValue] of pairs) {
     const okJs = same(mineValue, jsValue);
@@ -188,7 +192,7 @@ for (const item of problems.slice(0, 12)) console.log('    ' + item);
 console.log(`  术语变体（已归一，不计为差异）：${variants.length} 条`);
 for (const item of [...new Set(variants)].slice(0, 6)) console.log('    ' + item);
 if (diffs.length === 0 && problems.length === 0) {
-  console.log('  三方在阴阳/纳甲/六亲/六神/旬空上逐字段一致（仍不等于传统规则正确）。');
+  console.log('  三方在阴阳/纳甲/六亲/六神/旬空/卦宫上逐字段一致（仍不等于传统规则正确）。');
   process.exitCode = 0;
 } else {
   console.log('  对照未通过：不得据此声称逐字段一致。');

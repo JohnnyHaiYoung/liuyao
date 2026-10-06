@@ -113,18 +113,20 @@ Pop-Location
 
 判定：输出与项目内一致；盘面 JSON 不含 `E:`/`F:` 路径；不访问网络、不调用 Python。
 
-**实际结果（2026-10-04 执行）**：
+**实际结果（2026-10-05，新目录按锁文件重装；勘误 2 已按第三阶段最终验收修正）**：
 
 ```text
-已复制到 C:\Users\...\AppData\Local\Temp\paipan-migrate-check
-exit=0
-本卦=山水蒙 宫=离宫四世 世4应1 旬空=戌亥
-逐爻六亲纳甲: 父母戊寅木 子孙戊辰土 兄弟戊午火 子孙丙戌土 官鬼丙子水 父母丙寅木
-盘面 JSON 中盘符路径出现次数: 0
-与项目内运行结果一致: True
+# 新目录只复制源码/配置/规则/脚本与锁文件（不含 node_modules），随后 npm ci --omit=dev
+added 1 package in 2s                      # 生产依赖仅 lunar-typescript@1.8.6
+node_modules 下文件数: 79
+node bin/paipan.ts --lines 7 7 9 6 6 7 --day 戊戌 --month 亥 --canonical
+→ exit=0；本卦=山天大畜 → 变卦=天泽履；宫=艮宫二世 世2应5；盘符路径出现次数: 0
+node scripts/regression.mjs → 27/27 通过
 ```
 
-即：把 `paipan/` 整体复制到项目目录之外后，仅凭 Node（v22）+ 随包 `node_modules` 即可运行，结果与项目内完全一致、不含任何主机绝对路径。
+即：在新目录**依锁文件重装生产依赖**后（而非复制现成的 `node_modules`），仅凭 Node ≥ 22.18 即可运行；输出与项目内一致、不含任何主机绝对路径、不访问网络、不调用 Python。
+
+> 边界（沿用验收方结论）：该验证使用本机 npm 缓存/代理完成，**不证明服务器网络可访问 npm registry**；若目标环境无外网，需预置离线包或缓存。
 
 ## 8. 发布内容清单与 SHA-256
 
@@ -144,7 +146,7 @@ exit=0
 | `paipan/scripts/invariants.mjs` | `749e380e166b4072d5445553f91ccd4228295f005d7a077fcfc7ef3876bbe70a` |
 | `paipan/scripts/names-check.mjs` | `c733cd7ced55efa198ba234085d8327944f05b494e9f23faa0ecd3bf1b5dc638` |
 | `paipan/scripts/regression.mjs` | `f233f7f887614ea56cb68efb9d49fec63d1fe4942e71714637ed6e8efe8dc859` |
-| `paipan/scripts/upstream-compare.mjs` | `7a8e230d598f14629bfb2d90af74751a2b20cabbfbb0abe94a715992d391017e` |
+| `paipan/scripts/upstream-compare.mjs` | `59fb3ec508da8e0f5eeac8aa0839b64b480a34e4d6b3501a6a20fd1af460a4b6` |
 | `paipan/src/calendar.ts` | `17b0f34cfcfd71f2c93611ae01b965f5bb3424163b03f9bc02c50f73df20570b` |
 | `paipan/src/core.ts` | `04d309a06935660c15445b8e87a83f36e469a27eb2bd42466f7c6608c9f2083d` |
 | `paipan/src/rules.ts` | `49b82d1f4bb8034c867c5775d966eca2756eb506bd2323480d10c4b2e3b2a4bf` |
