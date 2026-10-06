@@ -90,8 +90,6 @@ const beforeCounts = { messages: db.prepare('SELECT COUNT(*) AS c FROM messages'
 console.log('\n=== 3) 快照读写（盘面 + 来源） ===');
 const { createChartRun } = await import('../src/server/chart/service.ts');
 const snapshots = await import('../src/server/chart/snapshots.ts');
-const { buildChart } = await import('liuyao-paipan');
-void buildChart;
 
 const conversationId = after.conversations[0]?.id ?? null;
 if (!conversationId) {
