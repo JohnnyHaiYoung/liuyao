@@ -1,0 +1,255 @@
+{
+  "catalogVersion": "wiki-catalog.v1",
+  "generatedFrom": {
+    "indexPath": "wiki/index.md",
+    "indexSha256": "13408f01f65f61745d539ead439c0aaa26b672b03ad7297e7bbaf8779a903b9d",
+    "note": "由 app/scripts/build-wiki-catalog.mjs 生成；不写入时间戳以保证 --check 可做漂移检测"
+  },
+  "pageCount": 10,
+  "pages": [
+    {
+      "pageId": "comparison:meihua-vs-liuyao",
+      "path": "wiki/comparisons/meihua-vs-liuyao.md",
+      "kind": "comparison",
+      "title": "对照：梅花易数起卦与六爻断卦的边界",
+      "displayName": "梅花易数起卦与六爻断卦的边界",
+      "topics": [
+        "两份来源各说了什么",
+        "冲突来源分析（不合并为统一规则）",
+        "不能据此推出的结论",
+        "待补充"
+      ],
+      "aliases": [
+        "梅花易数和六爻的区别",
+        "梅花起卦与六爻断卦"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-25fcddea758b",
+        "src-f3f838d501b1"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 3178,
+      "sha256": "07c8dd523ecc420ae6471c9f6ff429c28aab0e409c93c4ecf59d70202830d84d"
+    },
+    {
+      "pageId": "concept:yongshen",
+      "path": "wiki/concepts/yongshen.md",
+      "kind": "concept",
+      "title": "取用神",
+      "displayName": "取用神",
+      "topics": [
+        "一、按六亲取用神的基本条目",
+        "二、用神随「问题目标/意念」变化",
+        "三、用神选取的更深一层主张（同一来源内部的层次差异）",
+        "四、未核实与争议",
+        "待补充"
+      ],
+      "aliases": [
+        "取用神",
+        "如何取用神",
+        "用神怎么取",
+        "用神是什么"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-08862b06aea9",
+        "src-25fcddea758b",
+        "src-3f8243c07930",
+        "src-e6fc8612e955",
+        "src-f3f838d501b1"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 4202,
+      "sha256": "73e4903a9d2bf8c3a4cd3ed2d2cf92cd2421c12d7e95418057c9e1802be9fae8"
+    },
+    {
+      "pageId": "log:log",
+      "path": "wiki/log.md",
+      "kind": "log",
+      "title": "Wiki 维护记录",
+      "displayName": "维护记录",
+      "topics": [
+        "2026-09-30 ingest | 六爻取用神之辩证看法",
+        "2026-10-02 ingest | 阶段 2 小样本（6 份来源）",
+        "2026-10-02 fix | 按第二阶段独立验收记录修复（`docs/phase2_acceptance_2026-10-02.md`）"
+      ],
+      "aliases": [
+        "维护记录"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-08862b06aea9",
+        "src-25fcddea758b",
+        "src-3f8243c07930",
+        "src-946795472cd6",
+        "src-e6fc8612e955",
+        "src-f3f838d501b1"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 4761,
+      "sha256": "47210d499203bdf5af24014f57063ea63121c9a31da9d65fd8aadbe9e25c9ffc"
+    },
+    {
+      "pageId": "schema:schema",
+      "path": "wiki/schema.md",
+      "kind": "schema",
+      "title": "Wiki 编写规则",
+      "displayName": "Wiki 编写规则",
+      "topics": [
+        "页面类型",
+        "每个可引用主张的最少字段",
+        "编入流程"
+      ],
+      "aliases": [
+        "Wiki 编写规则"
+      ],
+      "methodLabels": [],
+      "sourceIds": [],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 2598,
+      "sha256": "eca9273f4481fa85f723b17c7b06f94772aa5394f3c2fb92bee6bb55353a7aac"
+    },
+    {
+      "pageId": "source:src-08862b06aea9",
+      "path": "wiki/sources/src-08862b06aea9.md",
+      "kind": "source",
+      "title": "来源：六爻取用神之辩证看法",
+      "displayName": "src-08862b06aea9",
+      "topics": [
+        "本文主张（按清洗文本锚点定位）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-08862b06aea9"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 2923,
+      "sha256": "792b354dba7a5dc0adf93a3c8451aa05b9e976961a3a0c3f47d7162f4890f5ec"
+    },
+    {
+      "pageId": "source:src-25fcddea758b",
+      "path": "wiki/sources/src-25fcddea758b.md",
+      "kind": "source",
+      "title": "来源：《周易预测学》讲义",
+      "displayName": "src-25fcddea758b",
+      "topics": [
+        "本文主张（按清洗文本锚点定位）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-08862b06aea9",
+        "src-25fcddea758b"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 3000,
+      "sha256": "9cec3a333ac144813fcb900ee998e69e9081614b6e0bc767cda1240c6f2804a6"
+    },
+    {
+      "pageId": "source:src-3f8243c07930",
+      "path": "wiki/sources/src-3f8243c07930.md",
+      "kind": "source",
+      "title": "来源：六爻用神答疑（51 页）王虎应",
+      "displayName": "src-3f8243c07930",
+      "topics": [
+        "本文主张（按清洗文本锚点定位）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-08862b06aea9",
+        "src-3f8243c07930"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 3801,
+      "sha256": "3e390dbf2492a8d6ba39f633ba7600e6db10beda51fa68378683de6661a2733b"
+    },
+    {
+      "pageId": "source:src-946795472cd6",
+      "path": "wiki/sources/src-946795472cd6.md",
+      "kind": "source",
+      "title": "来源：六爻爻象详解（DOCX）",
+      "displayName": "src-946795472cd6",
+      "topics": [
+        "本文主张（按清洗文本锚点定位）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-946795472cd6",
+        "src-e6fc8612e955"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 3322,
+      "sha256": "994d79a7e170c02d480522595c848d84128448dc85e9fc9129272624f240380d"
+    },
+    {
+      "pageId": "source:src-e6fc8612e955",
+      "path": "wiki/sources/src-e6fc8612e955.md",
+      "kind": "source",
+      "title": "来源：邵伟华周易预测学（下）（文字层 PDF）",
+      "displayName": "src-e6fc8612e955",
+      "topics": [
+        "文字层的性质（关键质量事实）",
+        "本文主张（按清洗文本锚点定位）",
+        "人工核对记录（卦图页，2026-10-02）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-25fcddea758b",
+        "src-e6fc8612e955"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 5468,
+      "sha256": "6bf457e4d83892ee0297ebff36e0f379ef214f1a54a10979ae5ebb3e5ffa27f7"
+    },
+    {
+      "pageId": "source:src-f3f838d501b1",
+      "path": "wiki/sources/src-f3f838d501b1.md",
+      "kind": "source",
+      "title": "来源：张成达 - 六爻快速断卦法（扫描 PDF，OCR）",
+      "displayName": "src-f3f838d501b1",
+      "topics": [
+        "本文主张（按清洗文本锚点定位）",
+        "定位与质量提醒"
+      ],
+      "aliases": [],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-25fcddea758b",
+        "src-f3f838d501b1"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 4130,
+      "sha256": "7fe0bf75fa513a1971da8e1cc252f8ccafe6bac9c2171be839e37fd0c4482458"
+    }
+  ]
+}
