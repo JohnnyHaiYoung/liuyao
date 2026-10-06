@@ -140,8 +140,7 @@ export interface LoginResponse {
   expiresAt: string;
 }
 
-export interface MeResponse {
-  authenticated: true;
+export interface MeResponse {  authenticated: true;
   owner: OwnerInfo;
 }
 
@@ -182,6 +181,18 @@ export interface SseStartData {
   promptVersion: string;
   /** 首条消息后服务端生成的标题；非空时前端可直接更新列表。 */
   conversationTitle?: string;
+}
+
+/** GET /api/models 的响应：只包含当前**真正可用**的模型（未配置密钥的提供方不出现）。 */
+export interface ModelsResponse {
+  defaultModelId: string;
+  models: Array<{
+    id: string;
+    provider: string;
+    label: string;
+    available: boolean;
+    isDefault?: boolean;
+  }>;
 }
 
 export interface SseDeltaData {

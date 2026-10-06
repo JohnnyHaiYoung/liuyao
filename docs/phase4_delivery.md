@@ -38,6 +38,8 @@
 
 **请求**（`POST /api/conversations/{id}/messages`，阶段 1 兼容）：新增可选 `chartInput`（爻值/模式/时刻/时区/日界/日柱/月建）与 `chartAction`（`auto`|`new`）。
 
+**模型清单**：`GET /api/models`（需登录）返回**当前真正可用**的模型——未配置密钥的提供方不出现；默认模型仍为 `deepseek-flash`。前端据此渲染选择器，服务端在提交消息时用 `resolveProviderForModel` 再校验一次。
+
 **SSE 事件**（顺序固定）：
 
 | 事件 | 载荷要点 |
@@ -114,7 +116,7 @@
 ## 11. 已知限制与未完成项
 
 1. **未做**真实 DeepSeek/千问 API 联调记录（无可用密钥）：千问证据来自本地模拟上游；DeepSeek 证据来自阶段 1 的真实联调记录与本地假模型链路。
-2. 客户端模型列表（`AVAILABLE_MODELS`）**尚未暴露千问**；服务端已能正确接受/拒绝（未配置时 `resolveModelId` 解析不到）。
+2. ~~客户端模型列表尚未暴露千问~~ **已解决**：新增 `GET /api/models`（登录后返回可用模型）与前端选择器；未配置密钥时只列出 `deepseek-flash`，配置后新增 `qwen3.7-plus` 且默认模型不变（离线自检实测两种情形，见 `check:qwen`）。
 3. 证据块目前是**会话内聚合展示最近一次盘面/依据**，尚未逐条消息内嵌渲染（数据已随 `MessageDto` 返回）。
 4. Next 仍打印 20 条"整项目会被追踪"的静态分析提示；已配置 `outputFileTracingExcludes`（`storage/**`、`corpus/originals/**` 等），但**不声称告警消失**；standalone 产物是否完全干净需阶段 5 发布包验证。
 5. 未实现：用神选取的权威口径、吉凶/应期算法、真太阳时；这些属带来源标签的解释，不是本阶段软件正确性范围。

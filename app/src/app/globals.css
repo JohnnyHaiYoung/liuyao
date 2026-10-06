@@ -658,3 +658,17 @@ textarea {
   border-radius: 4px;
   padding: 0 4px;
 }
+/* ── 阶段 4：模型选择器（只显示服务端下发的可用模型） ── */
+.model-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.model-picker select {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #d8d8d8);
+  background: var(--surface, #fff);
+}

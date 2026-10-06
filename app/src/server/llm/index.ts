@@ -52,6 +52,11 @@ export function getProvider(providerId: string): LlmProvider | undefined {
   return providers.get(providerId);
 }
 
+/** 已注册的提供方（阶段 4：供"可选模型清单"按可用性下发）。 */
+export function listRegisteredProviders(): LlmProvider[] {
+  return [...providers.values()];
+}
+
 export function getDefaultProvider(): LlmProvider {
   // 验收假模型模式下默认使用假模型；正常运行时固定为 DeepSeek。
   const useFake = isFakeModelEnabled();

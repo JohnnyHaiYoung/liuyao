@@ -106,6 +106,34 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
   // 阶段 4：本次回答的盘面与依据（来自服务端 SSE 事件；历史消息则读 MessageDto 快照）
   const [liveChart, setLiveChart] = useState<SseChartData | null>(null);
   const [liveSources, setLiveSources] = useState<SseSourceRefData[]>([]);
+  // 阶段 4：可选模型由服务端按可用性下发（未配置密钥的提供方不出现）
+  const [availableModels, setAvailableModels] = useState<Array<{ id: string; label: string; isDefault?: boolean }>>([]);
+  const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/models', { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) return;
+        const body = (await response.json()) as { defaultModelId?: string; models?: Array<{ id: string; label: string; isDefault?: boolean }> };
+        if (cancelled) return;
+        const list = body.models ?? [];
+        setAvailableModels(list);
+        const preferred = list.find((item) => item.isDefault)?.id ?? body.defaultModelId;
+        if (preferred && list.some((item) => item.id === selectedModel) === false) {
+          setSelectedModel(preferred);
+        }
+      } catch {
+        /* 取不到清单时保持默认模型，不影响聊天 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // 只在挂载时取一次；模型可用性变化需要刷新页面
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [composer, setComposer] = useState('');
@@ -335,7 +363,7 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
 
     try {
       await streamChat(
-        { conversationId, clientMessageId, content, model: defaultModel, signal: controller.signal },
+        { conversationId, clientMessageId, content, model: selectedModel, signal: controller.signal },
         {
           onStart: (data) => {
             startedStream = true;
@@ -773,6 +801,26 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
               <button type="button" className="button ghost" onClick={() => void loadOlder()} disabled={loadingMessages}>
                 {loadingMessages ? '加载中…' : '加载更早的消息'}
               </button>
+            </div>
+          ) : null}
+
+          {availableModels.length > 1 ? (
+            <div className="model-picker">
+              <label htmlFor="model-select">模型：</label>
+              <select
+                id="model-select"
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                disabled={generating}
+              >
+                {availableModels.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                    {item.isDefault ? '（默认）' : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="conversation-meta">只有配置了密钥的提供方会出现在这里；切换模型不影响历史引用与旧盘。</span>
             </div>
           ) : null}
 
