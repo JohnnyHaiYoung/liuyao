@@ -174,7 +174,32 @@ ALTER TABLE messages ADD COLUMN chart_run_id TEXT;                -- 每条助�
 
 不扩充资料、不微调、不引入 embedding/RAG 服务、不实现吉凶/应期权威算法、不做阶段 5 的发布包与备份恢复验收、不重写阶段 1 聊天与阶段 3 排盘核心。现实占断命中率不作为验收标准。
 
-## 9. 第三阶段两处非阻断勘误（本阶段一并修正）
+## 10. 接入 `stream-service` 的落地清单（2026-10-06 按真实代码核对，含行锚点）
+
+以下行号基于提交 `0604284` 时的 `app/src/server/chat/stream-service.ts`（355 行）与
+`app/src/app/api/conversations/[id]/messages/route.ts`（101 行）；实施时以当前文件为准。
+
+| 步骤 | 位置 | 具体改动 |
+| --- | --- | --- |
+| 1 | `stream-service.ts:128`、`:231` | `promptVersion: PROMPT_VERSION` → `PHASE4_PROMPT_VERSION`（`prompt.ts` 已导出 `phase4-v1`） |
+| 2 | `stream-service.ts:154-160` | 在取 `history` 之后、构造 `llmMessages` 之前调用 `planTurn({question: params.content, projectRoot, catalog, chartInput, currentChartRunId, promptVersion})`；用 `buildTurnContext()` 产出 `systemPrompt`，替换 `buildSystemPrompt()` |
+| 3 | `stream-service.ts:160` | `llmMessages = [{role:'system', content: turnContext.systemPrompt}, ...history]`；**注意 history 已包含刚保存的用户消息**，不要再重复追加问题 |
+| 4 | 本地澄清分支 | 若 `plan.missingInputs.length > 0 \|\| plan.ambiguities.length > 0`：**不调用模型**，用 `buildMissingInputReply(plan)` 作为助手正文，按 `start → delta → done`（`status: 'completed'`，无 `sources`/`chart`）落库并结束 |
+| 5 | `stream-service.ts:225-233`（`send('start', …)` 之后） | 新增 `sources` 事件（`{sources: SourceRef[]}`，仅可引用片段）与 `chart` 事件（`{chartRunId, summary, canonicalHash, action}`）；顺序固定 `start → sources → chart → delta*  → done` |
+| 6 | `stream-service.ts:235-252`（调用 provider 前后） | 新建盘面时先 `insertChartRun()`（在**短事务**里，不在模型流期间），把 `chartRunId` 记入局部变量；沿用旧盘时只读 `getCurrentChartRun()` / `getChartRunForMessage()`，**不重算** |
+| 7 | `stream-service.ts:280-295`（`finalizeAssistantMessage` 之后） | 短事务写入：`bindMessageChart({messageId, chartRunId, planJson: JSON.stringify(plan), promptVersion})`、`insertMessageSources(db, messageId, validateCitations(assistantText, wiki.snippets).citations)`；失败/中断时也保存 plan 与已生成的来源，但不得伪造完成态 |
+| 8 | `stream-service.ts:297-321` | `SseDoneData` 增加 `sourceIds` 与 `chartRunId`；`error` 分支保留盘面与来源状态（不伪装完成） |
+| 9 | `shared/types.ts:157` | `SseEventName` 增加 `'sources' \| 'chart'`；新增 `SseSourcesData`/`SseChartData`，`SseDoneData` 增加可选 `sourceIds`/`chartRunId`；`MessageDto` 增加可选 `sources`/`chart` 快照（旧消息为 `null`） |
+| 10 | `lib/api-client.ts:175-177`、`:227-237` | 增加 `onSources`/`onChart` 回调与 `case 'sources'`/`case 'chart'` 分支；未识别事件保持向后兼容 |
+| 11 | `components/ChatApp.tsx` | 渲染服务端给出的盘面摘要与可点击出处（只用服务端 `citations`，不解析模型文本里的 Sx/路径）；"展开依据"显示来源、质量与计算口径 |
+| 12 | `route.ts:71-92` | `ChatRequest` 透传可选 `chartInput` 与 `chartAction`（校验：爻值只接受 6/7/8/9，时区走白名单；越权/非法一律 400） |
+
+**验收脚本**（下一步实现）：
+- `app/scripts/check-phase4-e2e.mjs`：假上游 + 真实 Next 服务，覆盖四条主流程（概念 / 来源比较 / 具体卦例 / 旧卦追问）、SSE 事件顺序、历史 GET 与 `done` 一致、缺项澄清不调用模型、S99 不成链接。
+- 阶段 1 回归：`npm run verify:phase1`（需运行中的服务 + 验收密码）——登录、SSE、停止生成、分页、两处重命名。
+- `next build` 必须真正打包 `liuyao-paipan`（届时以构建产物中出现该包为证）。
+
+## 11. 第三阶段两处非阻断勘误（本阶段一并修正）
 
 1. **卦宫是否自动比较**：`paipan/scripts/upstream-compare.mjs` 当前只打印三方卦宫 → 增加**机器比较**（我方 `chart.palace.name` vs JS `palace.name` vs Python `palace`），差异计入非零退出；并把 `docs/phase3_delivery.md` 第 3 节表述改为与实现一致。
 2. **旧迁移验证文字**：`docs/phase3_delivery.md` 第 7 节仍残留"2026-10-04 实际结果/随包 `node_modules`"的旧叙述 → 替换为当前"新目录按锁文件 `npm ci --omit=dev` 重装"的真实记录。
