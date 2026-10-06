@@ -2,12 +2,16 @@ import { DEFAULT_MODEL } from '@/shared/types';
 import { getConfig } from '../config';
 import { DeepSeekProvider } from './deepseek';
 import { FakeStreamProvider } from './fake';
+import { QwenProvider } from './qwen';
 import type { LlmProvider } from './types';
 
 /**
  * 模型提供方注册表。
- * 阶段 1 只注册 DeepSeek；阶段 4 在此加入千问（qwen3.7-plus）即可，
+ * 阶段 1 只注册 DeepSeek；阶段 4 在此加入千问（qwen3.7-plus），
  * 上层聊天流程与 SSE 协议保持不变。
+ *
+ * 千问的可用性由适配器自己判断：未配置 QWEN_API_KEY/DASHSCOPE_API_KEY 时 listModels() 返回空，
+ * 因此 resolveProviderForModel('qwen3.7-plus') 得到 null、请求被明确拒绝，而**默认模型仍是 DeepSeek**。
  *
  * LIUYAO_FAKE_MODEL=1 时额外注册本地验收用假模型（见 llm/fake.ts），
  * 用于在没有真实密钥的环境里验证流式与持久化链路；默认关闭。
@@ -20,6 +24,7 @@ function register(provider: LlmProvider): void {
 }
 
 register(new DeepSeekProvider());
+register(new QwenProvider());
 
 export function isFakeModelEnabled(): boolean {
   return getConfig().llm.fakeMode;
