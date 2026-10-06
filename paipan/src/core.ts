@@ -57,6 +57,8 @@ export interface ChartResult {
   coreVersion: string;
   input: {
     lineValues: number[];
+    /** 调用方传入的原始爻值字符串（原样回显，便于追溯；阶段 3 复验 P1-1 要求） */
+    rawLineValues: string[];
     order: 'bottom_up';
     orderNote: string;
     movingPositions: number[];
