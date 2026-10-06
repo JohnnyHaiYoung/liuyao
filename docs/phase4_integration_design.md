@@ -174,7 +174,7 @@ ALTER TABLE messages ADD COLUMN chart_run_id TEXT;                -- 每条助�
 
 不扩充资料、不微调、不引入 embedding/RAG 服务、不实现吉凶/应期权威算法、不做阶段 5 的发布包与备份恢复验收、不重写阶段 1 聊天与阶段 3 排盘核心。现实占断命中率不作为验收标准。
 
-## 10. 接入 `stream-service` 的落地清单（2026-10-06 按真实代码核对，含行锚点）
+## 9. 接入 `stream-service` 的落地清单（2026-10-06 按真实代码核对，含行锚点）
 
 以下行号基于提交 `0604284` 时的 `app/src/server/chat/stream-service.ts`（355 行）与
 `app/src/app/api/conversations/[id]/messages/route.ts`（101 行）；实施时以当前文件为准。
@@ -199,7 +199,7 @@ ALTER TABLE messages ADD COLUMN chart_run_id TEXT;                -- 每条助�
 - 阶段 1 回归：`npm run verify:phase1`（需运行中的服务 + 验收密码）——登录、SSE、停止生成、分页、两处重命名。
 - `next build` 必须真正打包 `liuyao-paipan`（届时以构建产物中出现该包为证）。
 
-## 11. 第三阶段两处非阻断勘误（本阶段一并修正）
+## 10. 第三阶段两处非阻断勘误（本阶段一并修正）
 
 1. **卦宫是否自动比较**：`paipan/scripts/upstream-compare.mjs` 当前只打印三方卦宫 → 增加**机器比较**（我方 `chart.palace.name` vs JS `palace.name` vs Python `palace`），差异计入非零退出；并把 `docs/phase3_delivery.md` 第 3 节表述改为与实现一致。
 2. **旧迁移验证文字**：`docs/phase3_delivery.md` 第 7 节仍残留"2026-10-04 实际结果/随包 `node_modules`"的旧叙述 → 替换为当前"新目录按锁文件 `npm ci --omit=dev` 重装"的真实记录。
