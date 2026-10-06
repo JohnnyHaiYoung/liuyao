@@ -73,6 +73,19 @@ export interface MessageDto {
   updatedAt: string;
   completedAt: string | null;
   usage: UsageDto | null;
+  /** 阶段 4：本次回答的来源快照（历史回看用；旧消息为 null）。 */
+  sources?: SseSourceRefData[] | null;
+  /** 阶段 4：本次回答绑定的盘面摘要（历史回看用；旧消息为 null，沿用旧盘时为旧盘）。 */
+  chart?: MessageChartSnapshot | null;
+}
+
+/** 历史回看用的盘面快照摘要（字段与 SSE chart 事件同源）。 */
+export interface MessageChartSnapshot {
+  chartRunId: string;
+  canonicalHash: string;
+  ruleProfileVersion: string;
+  coreVersion: string;
+  summary: SseChartData['summary'];
 }
 
 export interface ConversationListResponse {

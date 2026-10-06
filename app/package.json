@@ -22,7 +22,6 @@
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
-    "liuyao-paipan": "file:../paipan",
     "lunar-typescript": "1.8.6",
     "next": "16.3.8",
     "react": "19.3.0",

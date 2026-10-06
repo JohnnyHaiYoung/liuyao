@@ -97,7 +97,10 @@ const conversationId = after.conversations[0]?.id ?? null;
 if (!conversationId) {
   check('存在可用于挂载快照的会话', false, '旧库里没有会话，无法验证外键关联');
 } else {
-  const messageId = after.messages.find((row) => row.role === 'assistant')?.id ?? after.messages[0]?.id ?? null;
+  // 必须取**同一会话**下的助手消息：历史接口按会话查询，跨会话取会读不到
+  const messageId = after.messages.find((row) => row.conversation_id === conversationId && row.role === 'assistant')?.id
+    ?? after.messages.find((row) => row.conversation_id === conversationId)?.id
+    ?? null;
   const run = createChartRun({ lineValues: [8, 7, 8, 8, 8, 7], mode: 'manual_calendar', dayGanzhi: '戊辰', monthBranch: '申', sourceInput: '帮我看看这卦：8 7 8 8 8 7，戊辰日申月' });
   if (!run.ok) {
     check('生成盘面快照', false, `${run.errorCode}: ${run.message}`);
@@ -129,6 +132,30 @@ if (!conversationId) {
     const failedId = snapshots.insertFailedChartRun(db, { conversationId, sourceInput: '帮我起卦', lineValues: [5, 7, 8, 8, 8, 7], errorCode: 'invalid_line_value' });
     const failed = snapshots.getChartRun(db, failedId);
     check('失败记录只存错误码、不存盘面', failed?.errorCode === 'invalid_line_value' && failed?.chartJson === '', `${failed?.errorCode}`);
+
+    // 历史回看：走真实仓储函数（历史 GET 用的就是它），验证与 done 事件同源的快照
+    const messagesRepo = await import('../src/server/db/messages.ts');
+    const page = messagesRepo.listMessages(db, conversationId, { limit: 50 });
+    const bound = page.items.find((item) => item.id === messageId);
+    check(
+      '历史 GET 返回同一盘面快照（哈希与版本一致）',
+      bound?.chart?.chartRunId === chartRunId && bound?.chart?.canonicalHash === run.canonicalHash && bound.chart.ruleProfileVersion === 'liuyao-rule-profile.v1' && bound.chart.coreVersion === 'paipan-core/0.1.0',
+      bound?.chart ? `${bound.chart.chartRunId.slice(0, 8)}… ${bound.chart.canonicalHash.slice(0, 12)}…` : '未读到盘面',
+    );
+    check(
+      '历史 GET 的盘面摘要字段完整（卦名/宫/世应/旬空/历法）',
+      bound?.chart?.summary?.originalHexagram === '山水蒙' && bound.chart.summary.palace === '离宫' && bound.chart.summary.shiPosition === 1 + 3 && Array.isArray(bound.chart.summary.voidBranches),
+      bound?.chart ? `${bound.chart.summary.originalHexagram} ${bound.chart.summary.palace}${bound.chart.summary.palaceStage} 世${bound.chart.summary.shiPosition}应${bound.chart.summary.yingPosition}` : '',
+    );
+    check(
+      '历史 GET 返回来源快照（sid/来源/定位/质量/页哈希）',
+      bound?.sources?.length === 2 && bound.sources.every((item) => item.href.startsWith('/api/sources/') && item.sourceId.startsWith('src-') && item.label.includes('来源')),
+      bound?.sources ? bound.sources.map((item) => `${item.sid}:${item.sourceId}:${item.locatorValue}`).join(' ') : '未读到来源',
+    );
+    check('历史 GET 的引用链接为服务端生成（模型无法注入）', bound?.sources?.every((item) => item.href === `/api/sources/${item.sourceId}${item.locatorValue ? `?locator=${encodeURIComponent(item.locatorValue)}` : ''}`) === true, bound?.sources?.[0]?.href ?? '');
+    const oldUserMessage = page.items.find((item) => item.role === 'user');
+    check('阶段 1 旧消息在历史里仍为“无盘无来源”', oldUserMessage?.chart === null && oldUserMessage?.sources === null, `${oldUserMessage?.id?.slice(0, 8) ?? '(无)'}`);
+    check('旧消息原有字段未受快照接入影响', typeof oldUserMessage?.content === 'string' && typeof oldUserMessage?.status === 'string' && 'model' in (oldUserMessage ?? {}), oldUserMessage ? `${oldUserMessage.status}/${oldUserMessage.model ?? '-'}` : '');
   }
 }
 

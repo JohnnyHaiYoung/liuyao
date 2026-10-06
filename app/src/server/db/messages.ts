@@ -1,6 +1,9 @@
 import type { Database as SqliteDatabase } from 'better-sqlite3';
 import type { LlmMessage } from '../llm/types';
 import type { MessageDto, MessageRole, MessageStatus, UsageDto } from '@/shared/types';
+import { getChartRun, listMessageSources } from '../chart/snapshots';
+import { summarizeStoredChart } from '../chart/summary';
+import { buildSourceHref } from '../chat/citations';
 
 /** 消息数据访问：用户消息、助手占位、增量落库与历史分页。 */
 
@@ -222,6 +225,67 @@ export interface MessagePage {
 }
 
 /**
+ * 阶段 4：给历史消息附上当时的来源快照与盘面摘要（旧消息为 null）。
+ *
+ * 快照缺失（旧库、未迁移、快照损坏）时**不抛出**：历史读取必须保持阶段 1 的可用性，
+ * 只是这些字段为 null，绝不因此看不到旧消息。
+ */
+function attachPhase4Snapshots(db: SqliteDatabase, items: MessageDto[], rows: MessageRow[]): void {
+  const byId = new Map(rows.map((row) => [row.id, row as unknown as Record<string, unknown>]));
+  for (const item of items) {
+    const row = byId.get(item.id);
+    if (!row) continue;
+    try {
+      const stored = listMessageSources(db, item.id);
+      item.sources =
+        stored.length > 0
+          ? stored.map((record) => ({
+              sid: record.sid,
+              sourceId: record.sourceId,
+              pagePath: record.pagePath,
+              locatorType: record.locatorType,
+              locatorValue: record.locatorValue,
+              qualityStatus: record.qualityStatus === 'needs_review' ? 'needs_review' : 'usable',
+              href: buildSourceHref(record.sourceId, record.locatorType, record.locatorValue),
+              label: `来源 ${record.sourceId} ${record.locatorValue ?? ''}`.trim(),
+              needsQualityNotice: record.qualityStatus === 'needs_review',
+            }))
+          : null;
+      const chartRunId = typeof row.chart_run_id === 'string' && row.chart_run_id !== '' ? row.chart_run_id : null;
+      if (chartRunId === null) {
+        item.chart = null;
+        continue;
+      }
+      const run = getChartRun(db, chartRunId);
+      if (!run || run.chartJson === '') {
+        item.chart = null;
+        continue;
+      }
+      const summarized = summarizeStoredChart(run.chartJson, {
+        chartRunId: run.id,
+        canonicalHash: run.canonicalHash,
+        ruleProfileVersion: run.ruleProfileVersion,
+        coreVersion: run.coreVersion,
+        action: 'new',
+      });
+      item.chart = summarized
+        ? {
+            chartRunId: summarized.chartRunId,
+            canonicalHash: summarized.canonicalHash,
+            ruleProfileVersion: summarized.ruleProfileVersion,
+            coreVersion: summarized.coreVersion,
+            summary: summarized.summary,
+          }
+        : null;
+    } catch (error) {
+      console.warn('[liuyao] 读取阶段 4 快照失败，历史仍按阶段 1 字段返回', error);
+      item.sources = null;
+      item.chart = null;
+    }
+  }
+}
+
+/**
  * 历史分页：按 rowid（插入顺序）稳定排序。
  * 默认返回最近 limit 条（升序输出，便于直接渲染），游标指更早的消息。
  */
@@ -247,8 +311,10 @@ export function listMessages(
   const page = hasMore ? rows.slice(0, limit) : rows;
   const ascending = [...page].reverse();
   const oldest = ascending[0];
+  const items = ascending.map(toMessageDto);
+  attachPhase4Snapshots(db, items, ascending);
   return {
-    items: ascending.map(toMessageDto),
+    items,
     nextCursor: hasMore && oldest?.rowid != null ? String(oldest.rowid) : null,
     hasMore,
   };
