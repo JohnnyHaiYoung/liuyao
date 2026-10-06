@@ -17,6 +17,7 @@
     "verify:phase1": "node scripts/verify-phase1.mjs",
     "check:wiki": "node scripts/build-wiki-catalog.mjs --check && node scripts/check-wiki-select.mjs && node scripts/check-source-reader.mjs",
     "check:chart": "node scripts/check-chart-service.mjs",
+    "check:orchestration": "node scripts/check-orchestration.mjs",
     "check:migration-phase4": "node --import ./scripts/lib/register-ts.mjs scripts/check-migration-phase4.mjs"
   },
   "dependencies": {

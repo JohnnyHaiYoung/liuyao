@@ -15,6 +15,7 @@ import {
   canonicalize,
   fromManual,
   fromMoment,
+  isSexagenary,
   PaipanError,
   SUPPORTED_RANGE,
   SUPPORTED_TIMEZONES,
@@ -37,7 +38,7 @@ export type ChartErrorCode =
   | 'conflicting_calendar_mode'
   | 'invalid_day_boundary';
 
-export type MissingInput = 'lineValues' | 'castTime' | 'timezone' | 'calendar';
+export type MissingInput = 'lineValues' | 'castTime' | 'timezone' | 'dayGanzhi' | 'monthBranch' | 'calendar';
 
 export interface ChartInput {
   /** 六次爻值，初爻在前；来自显式结构化输入或从文本中提取的候选 */
@@ -131,7 +132,13 @@ export function normalizeChartInput(input: ChartInput): { ok: true; normalized: 
   }
 
   // 先把"够不够算"一次判全，只追问必要缺项；此时不做任何补全（不用发送时间、不用服务器时区）
-  if (!hasAuto && !hasManual) missing.push('calendar');
+  if (!hasAuto && !hasManual) {
+    // 既没有时刻也没有已知日柱/月建：按默认的自动历法路径逐项列出用户要补什么
+    missing.push('castTime', 'timezone');
+  } else if (hasManual) {
+    if (typeof input.dayGanzhi !== 'string' || input.dayGanzhi.trim() === '') missing.push('dayGanzhi');
+    if (typeof input.monthBranch !== 'string' || input.monthBranch.trim() === '') missing.push('monthBranch');
+  }
   if (hasAuto && (typeof input.timezone !== 'string' || input.timezone.trim() === '')) missing.push('timezone');
 
   if (missing.length > 0) {
@@ -142,7 +149,7 @@ export function normalizeChartInput(input: ChartInput): { ok: true; normalized: 
       errorCode: onlyTimezone ? 'missing_timezone' : 'chart_input_incomplete',
       message: onlyTimezone
         ? `自动历法模式必须提供 IANA 时区（本版支持：${SUPPORTED_TIMEZONES.join('、')}）。服务器时区不会被当作起卦时区。`
-        : '缺少排盘所需输入，请补齐后再试；本服务不会用发送时间或服务器时区代替，也不会猜爻序。',
+        : `缺少排盘所需输入：${unique.join('、')}。本服务不会用发送时间或服务器时区代替，也不会猜爻序。`,
       missingInputs: unique,
     };
   }
@@ -251,6 +258,10 @@ export interface TextExtraction {
   lineValues: number[] | null;
   castAt: string | null;
   timezone: string | null;
+  /** 文本里写明的已知日柱（如「庚午日」） */
+  dayGanzhi: string | null;
+  /** 文本里写明的月建（如「巳月」） */
+  monthBranch: string | null;
   /** 提取过程中的含糊点（例如爻序不明、时间只有日期没有钟点） */
   ambiguities: string[];
   missing: MissingInput[];
@@ -306,12 +317,32 @@ export function extractChartInputFromText(text: string): TextExtraction {
   const timezoneMatch = source.match(/(Asia\/Shanghai|北京时间|中国标准时间|UTC\+8)/);
   const timezone = timezoneMatch ? 'Asia/Shanghai' : null;
 
+  // 手动历法：文本里写明的日柱/月建（如「庚午日、巳月」）——只认合法六十甲子
+  const dayMatch = source.match(/([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])\s*日/);
+  const monthMatch = source.match(/(?:^|[^\d\u4e00-\u9fa5])([子丑寅卯辰巳午未申酉戌亥])\s*月/);
+  const dayGanzhi = dayMatch && isSexagenary(dayMatch[1]!) ? dayMatch[1]! : null;
+  const monthBranch = monthMatch ? monthMatch[1]! : null;
+  if (dayMatch && !dayGanzhi) ambiguities.push(`文本里的「${dayMatch[1]}日」不是合法六十甲子，需用户确认`);
+
   const missing: MissingInput[] = [];
   if (!lineValues) missing.push('lineValues');
+  const hasManualFromText = dayGanzhi !== null && monthBranch !== null;
   if (!castAt) missing.push('castTime');
   if (!timezone) missing.push('timezone');
+  if (hasManualFromText) {
+    // 手动历法齐备时不再要求时刻与时区（但保留已识别到的信息）
+    return {
+      lineValues,
+      castAt,
+      timezone,
+      dayGanzhi,
+      monthBranch,
+      ambiguities,
+      missing: lineValues ? [] : ['lineValues'],
+    };
+  }
 
-  return { lineValues, castAt, timezone, ambiguities, missing };
+  return { lineValues, castAt, timezone, dayGanzhi, monthBranch, ambiguities, missing };
 }
 
 export { SUPPORTED_TIMEZONES, SUPPORTED_RANGE };

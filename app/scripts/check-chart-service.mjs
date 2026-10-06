@@ -76,7 +76,7 @@ console.log('\n=== 3) 缺项只追问、不补全 ===');
 {
   const noCalendar = createChartRun({ lineValues: [8, 7, 8, 8, 8, 7] });
   check('缺历法 → chart_input_incomplete', !noCalendar.ok && noCalendar.errorCode === 'chart_input_incomplete', noCalendar.ok ? '竟然成功' : noCalendar.errorCode);
-  check('缺项含 calendar 与 lineValues 之外的信息', !noCalendar.ok && noCalendar.missingInputs.includes('calendar'), noCalendar.ok ? '' : noCalendar.missingInputs.join(','));
+  check('缺项逐项精确（castTime + timezone，而不是笼统的 calendar）', !noCalendar.ok && noCalendar.missingInputs.includes('castTime') && noCalendar.missingInputs.includes('timezone'), noCalendar.ok ? '' : noCalendar.missingInputs.join(','));
 
   const noTimezone = createChartRun({ lineValues: [8, 7, 8, 8, 8, 7], mode: 'auto_calendar', castAt: '2026-09-06T20:00:00' });
   check('自动模式缺时区 → missing_timezone 且不排盘', !noTimezone.ok && noTimezone.errorCode === 'missing_timezone' && noTimezone.missingInputs.includes('timezone'), noTimezone.ok ? '竟然成功' : `${noTimezone.errorCode} missing=${noTimezone.missingInputs.join(',')}`);
