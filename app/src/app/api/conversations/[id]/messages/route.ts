@@ -89,6 +89,8 @@ export async function POST(request: NextRequest, context: RouteContext): Promise
     content: content.value,
     requestedModel: normalizeModelId(parsed.value.model),
     clientSignal: request.signal,
+    chartInput: parsed.value.chartInput ?? null,
+    chartAction: parsed.value.chartAction === 'new' ? 'new' : 'auto',
   });
 
   if (!outcome.ok) {

@@ -136,8 +136,12 @@ export interface ChatRequest {
   /** 浏览器生成的消息 ID，用于服务端去重。 */
   clientMessageId: string;
   content: string;
-  /** 可选模型覆盖；阶段 1 只有 deepseek-flash。 */
+  /** 可选模型覆盖；默认 deepseek-flash。 */
   model?: string;
+  /** 可选的结构化排盘输入（非强制）；服务端重新校验，缺项只追问。 */
+  chartInput?: ChatChartInput | null;
+  /** 'new' 表示用户明确要求另起一卦；'auto' 由服务端判断。 */
+  chartAction?: 'auto' | 'new';
 }
 
 export interface HealthzResponse {
@@ -154,7 +158,7 @@ export interface HealthzResponse {
 /* SSE 事件（服务端规范化的项目自有格式，不透传上游 DeepSeek 事件）      */
 /* ------------------------------------------------------------------ */
 
-export type SseEventName = 'start' | 'delta' | 'done' | 'error';
+export type SseEventName = 'start' | 'sources' | 'chart' | 'delta' | 'done' | 'error';
 
 export interface SseStartData {
   conversationId: string;
@@ -177,6 +181,65 @@ export interface SseDoneData {
   usage: UsageDto;
   /** 仅在 failed/interrupted 时出现。 */
   errorCode?: string;
+  /** 本次回答实际引用的来源编号（服务端已验证；历史 GET 返回同一列表）。 */
+  sourceIds?: string[];
+  /** 本次回答绑定的盘面快照 id（无盘为 null；沿用旧盘时为旧盘 id）。 */
+  chartRunId?: string | null;
+}
+
+/** 一条可点击出处（字段全部由服务端生成，模型无法注入）。 */
+export interface SseSourceRefData {
+  sid: string;
+  sourceId: string;
+  pagePath: string;
+  locatorType: string;
+  locatorValue: string | null;
+  qualityStatus: 'usable' | 'needs_review';
+  href: string;
+  label: string;
+  needsQualityNotice: boolean;
+}
+
+export interface SseSourcesData {
+  sources: SseSourceRefData[];
+  /** 模型提到但未被本次选页映射的编号（仅供提示，不会渲染成链接）。 */
+  unmappedSids?: string[];
+}
+
+export interface SseChartData {
+  action: 'new' | 'follow_up';
+  chartRunId: string;
+  canonicalHash: string;
+  ruleProfileVersion: string;
+  coreVersion: string;
+  /** 展示用摘要（卦名、动爻、宫、世应等，均来自服务端盘面）。 */
+  summary: {
+    originalHexagram: string;
+    changedHexagram: string | null;
+    movingPositions: number[];
+    palace: string;
+    palaceStage: string;
+    shiPosition: number;
+    yingPosition: number;
+    dayGanzhi: string | null;
+    monthBranch: string | null;
+    monthGanzhi?: string | null;
+    voidBranches: string[];
+    castAt?: string | null;
+    timezone?: string | null;
+    dayBoundary?: string | null;
+  };
+}
+
+/** 排盘请求输入（可选、非强制；服务端会重新校验，前端与模型不能直接决定盘面）。 */
+export interface ChatChartInput {
+  lineValues?: (number | string)[] | null;
+  mode?: 'auto_calendar' | 'manual_calendar' | 'none';
+  castAt?: string | null;
+  timezone?: string | null;
+  dayBoundary?: 'zi23' | 'midnight' | null;
+  dayGanzhi?: string | null;
+  monthBranch?: string | null;
 }
 
 export interface SseErrorData {

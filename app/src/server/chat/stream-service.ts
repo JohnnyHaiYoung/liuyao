@@ -7,9 +7,17 @@ import * as messagesRepo from '../db/messages';
 import { formatSseComment, formatSseEvent, SSE_RESPONSE_HEADERS } from '../http/sse';
 import { getDefaultProvider, resolveProviderForModel } from '../llm';
 import { EMPTY_USAGE, type LlmProvider, type LlmStreamResult, type LlmUsage } from '../llm/types';
-import { PROMPT_VERSION, buildSystemPrompt } from '../prompt';
+import { PHASE4_PROMPT_VERSION } from '../prompt';
 import { isGenerating, registerGeneration, unregisterGeneration } from './in-flight';
 import { deriveAutoTitle } from './title';
+import { loadCatalog, resolveProjectRoot, type WikiCatalog } from '../wiki/catalog';
+import { buildTurnContext, type TurnContext } from './context';
+import { buildSourceHref, validateCitations } from './citations';
+import { buildMissingInputReply, planTurn, type PlanObject } from './planner';
+import * as chartSnapshots from '../chart/snapshots';
+import type { ChartInput } from '../chart/service';
+import { PHASE4_SYSTEM_PROMPT } from '../prompt';
+import type { ChatChartInput, SseChartData, SseSourceRefData } from '@/shared/types';
 
 /**
  * 一次问答的流式编排。
@@ -32,6 +40,10 @@ export interface StartChatParams {
   requestedModel?: string | null;
   /** 浏览器断开（用户点停止或网络中断）时由 Next 触发。 */
   clientSignal: AbortSignal;
+  /** 可选的结构化排盘输入（非强制）；服务端会重新校验，前端不能决定盘面。 */
+  chartInput?: ChatChartInput | null;
+  /** 'new' 表示用户明确要求另起一卦。 */
+  chartAction?: 'auto' | 'new' | null;
 }
 
 export type StartChatOutcome =
@@ -125,7 +137,7 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
         ownerId: params.ownerId,
         provider: provider.id,
         model,
-        promptVersion: PROMPT_VERSION,
+        promptVersion: PHASE4_PROMPT_VERSION,
         now: startedAt,
       });
       conversationsRepo.touchConversation(db, params.conversationId, startedAt);
@@ -157,7 +169,107 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
     messageLimit: config.chat.contextMessageLimit,
     charBudget: config.chat.contextCharBudget,
   });
-  const llmMessages = [{ role: 'system' as const, content: buildSystemPrompt() }, ...history];
+
+  // ── 阶段 4：服务端编排（目录选页 + 排盘 + 预算），模型只负责解释 ──
+  const projectRoot = resolveProjectRoot();
+  let catalog: WikiCatalog | null = null;
+  try {
+    catalog = loadCatalog(projectRoot);
+  } catch (error) {
+    console.warn('[liuyao] Wiki 目录不可用，本次回答不提供本地证据', error);
+  }
+
+  const currentChartRun = chartSnapshots.getCurrentChartRun(db, params.conversationId);
+  const planned = catalog
+    ? planTurn({
+        question: params.content,
+        projectRoot,
+        catalog,
+        chartInput: (params.chartInput ?? null) as ChartInput | null,
+        currentChartRunId: currentChartRun?.id ?? null,
+        explicitNewChart: params.chartAction === 'new',
+        promptVersion: PHASE4_PROMPT_VERSION,
+      })
+    : null;
+  const plan: PlanObject | null = planned?.plan ?? null;
+
+  // 缺项/含糊：由本地逻辑直接澄清，不调用模型（也必须落库并按事件契约呈现）
+  const localReply = plan ? buildMissingInputReply(plan) : null;
+
+  const evidenceRefs: SseSourceRefData[] = (planned?.wiki.snippets ?? [])
+    .filter((snippet) => snippet.citable && snippet.sourceId !== null && snippet.locatorType !== 'none')
+    .map((snippet) => ({
+      sid: snippet.sid,
+      sourceId: snippet.sourceId!,
+      pagePath: snippet.pagePath,
+      locatorType: snippet.locatorType,
+      locatorValue: snippet.locatorValue,
+      qualityStatus: snippet.qualityStatus,
+      href: buildSourceHref(snippet.sourceId!, snippet.locatorType, snippet.locatorValue),
+      label: `来源 ${snippet.sourceId} ${snippet.locatorValue ?? ''}`.trim(),
+      needsQualityNotice: snippet.qualityStatus === 'needs_review',
+    }));
+
+  const followUpSnapshot =
+    plan?.chartAction === 'follow_up' && currentChartRun
+      ? { canonicalJson: currentChartRun.chartJson, canonicalHash: currentChartRun.canonicalHash, createdAt: currentChartRun.createdAt }
+      : null;
+
+  const turnContext: TurnContext | null = planned
+    ? buildTurnContext({
+        question: params.content,
+        wiki: planned.wiki,
+        chart: planned.chart && planned.chart.ok ? planned.chart : null,
+        followUpChart: followUpSnapshot,
+        notes: plan?.reasons ?? [],
+      })
+    : null;
+
+  // 新盘在建流之前落库（短事务，模型调用期间不持有事务）；沿用旧盘只读，不重算
+  let chartRunId: string | null = plan?.chartAction === 'follow_up' ? (currentChartRun?.id ?? null) : null;
+  if (planned?.chart && planned.chart.ok && plan?.chartAction === 'new') {
+    try {
+      chartRunId = chartSnapshots.insertChartRun(db, {
+        conversationId: params.conversationId,
+        createdByMessageId: assistantMessageId,
+        sourceInput: params.content,
+        result: planned.chart,
+      });
+    } catch (error) {
+      console.error('[liuyao] 保存盘面快照失败', error);
+      chartRunId = null;
+    }
+  }
+
+  const chartEvent: SseChartData | null =
+    chartRunId && planned?.chart && planned.chart.ok
+      ? {
+          action: plan?.chartAction === 'follow_up' ? 'follow_up' : 'new',
+          chartRunId,
+          canonicalHash: planned.chart.canonicalHash,
+          ruleProfileVersion: planned.chart.ruleProfileVersion,
+          coreVersion: planned.chart.coreVersion,
+          summary: {
+            originalHexagram: planned.chart.chart.chart.original.name,
+            changedHexagram: planned.chart.chart.chart.changed?.name ?? null,
+            movingPositions: planned.chart.chart.input.movingPositions,
+            palace: `${planned.chart.chart.chart.palace.name}宫`,
+            palaceStage: planned.chart.chart.chart.palace.stage,
+            shiPosition: planned.chart.chart.chart.shiPosition,
+            yingPosition: planned.chart.chart.chart.yingPosition,
+            dayGanzhi: planned.chart.calendar.dayGanzhi,
+            monthBranch: planned.chart.calendar.monthBranch,
+            monthGanzhi: planned.chart.calendar.monthGanzhi ?? null,
+            voidBranches: planned.chart.chart.chart.voidBranches ?? [],
+            castAt: planned.chart.calendar.localCivilTime ?? null,
+            timezone: planned.chart.calendar.timezone ?? null,
+            dayBoundary: planned.chart.calendar.dayBoundary ?? null,
+          },
+        }
+      : null;
+
+  const systemContent = turnContext?.systemPrompt ?? PHASE4_SYSTEM_PROMPT;
+  const llmMessages = [{ role: 'system' as const, content: systemContent }, ...history];
 
   const upstreamController = new AbortController();
   const registered = registerGeneration({
@@ -228,28 +340,51 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
           assistantMessageId,
           provider: provider.id,
           model,
-          promptVersion: PROMPT_VERSION,
+          promptVersion: PHASE4_PROMPT_VERSION,
           ...(autoTitle ? { conversationTitle: autoTitle } : {}),
         });
 
-        result = await provider.streamChat(
-          {
-            model,
-            messages: llmMessages,
-            signal: upstreamController.signal,
-            maxOutputTokens: config.llm.maxOutputTokens,
-          },
-          {
-            onDelta: (text) => {
-              assistantText += text;
-              send('delta', { text });
-              persistPartial(false);
+        // 事件顺序固定：start → sources → chart → delta* → done
+        if (evidenceRefs.length > 0) {
+          send('sources', { sources: evidenceRefs });
+        }
+        if (chartEvent) {
+          send('chart', chartEvent);
+        }
+
+        if (localReply !== null) {
+          // 缺项澄清由本地逻辑完成：不调用模型，但同样落库并走同一事件契约
+          assistantText = localReply;
+          send('delta', { text: localReply });
+          persistPartial(true);
+          result = {
+            status: 'completed',
+            usedModel: 'local-clarification',
+            usage: { ...EMPTY_USAGE },
+            errorCode: null,
+            errorDetail: null,
+            finishReason: 'local_clarification',
+          };
+        } else {
+          result = await provider.streamChat(
+            {
+              model,
+              messages: llmMessages,
+              signal: upstreamController.signal,
+              maxOutputTokens: config.llm.maxOutputTokens,
             },
-            onUsage: (next) => {
-              usage = next;
+            {
+              onDelta: (text) => {
+                assistantText += text;
+                send('delta', { text });
+                persistPartial(false);
+              },
+              onUsage: (next) => {
+                usage = next;
+              },
             },
-          },
-        );
+          );
+        }
       } catch (error) {
         console.error('[liuyao] 模型流异常', error);
         result = {
@@ -294,12 +429,62 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
         console.error('[liuyao] 保存助手消息最终状态失败', error);
       }
 
+      // ── 阶段 4：短事务写入来源快照、盘面绑定与计划对象（不在模型流期间持有事务） ──
+      const citationResult = validateCitations(
+        assistantText,
+        (planned?.wiki.snippets ?? []).map((snippet) => ({
+          sid: snippet.sid,
+          sourceId: snippet.sourceId,
+          pagePath: snippet.pagePath,
+          locatorType: snippet.locatorType,
+          locatorValue: snippet.locatorValue,
+          qualityStatus: snippet.qualityStatus,
+          citable: snippet.citable,
+        })),
+      );
+      let savedSourceCount = 0;
+      try {
+        if (citationResult.citations.length > 0) {
+          savedSourceCount = chartSnapshots.insertMessageSources(
+            db,
+            assistantMessageId,
+            citationResult.citations.map((item) => ({
+              sid: item.sid,
+              sourceId: item.sourceId,
+              pagePath: item.pagePath,
+              locatorType: item.locatorType,
+              locatorValue: item.locatorValue,
+              qualityStatus: item.qualityStatus,
+              excerpt: (planned?.wiki.snippets.find((snippet) => snippet.sid === item.sid)?.excerpt ?? '').slice(0, 4000),
+              pageSha256: planned?.wiki.snippets.find((snippet) => snippet.sid === item.sid)?.pageSha256 ?? '',
+            })),
+          );
+        }
+        chartSnapshots.bindMessageChart(db, {
+          messageId: assistantMessageId,
+          chartRunId,
+          planJson: plan ? JSON.stringify(plan) : null,
+          promptVersion: PHASE4_PROMPT_VERSION,
+        });
+        if (chartRunId && plan?.chartAction === 'new') {
+          chartSnapshots.setCurrentChartRun(db, params.conversationId, chartRunId);
+        }
+      } catch (error) {
+        console.error('[liuyao] 保存来源/盘面快照失败', error);
+      }
+      const sourceIds = citationResult.citations.map((item) => item.sid);
+      if (citationResult.unmappedSids.length > 0) {
+        console.warn(`[liuyao] 助手消息 ${assistantMessageId} 引用了未映射编号：${citationResult.unmappedSids.join(',')}`);
+      }
+
       if (result.status === 'completed') {
         const done: SseDoneData = {
           assistantMessageId,
           status: 'completed',
           usage: usageDto,
           ...(errorCode ? { errorCode } : {}),
+          sourceIds,
+          chartRunId,
         };
         send('done', done);
       } else if (result.status === 'interrupted') {
@@ -309,6 +494,8 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
             status: 'interrupted',
             usage: usageDto,
             errorCode: errorCode ?? ERROR_CODES.clientAborted,
+            sourceIds,
+            chartRunId,
           } satisfies SseDoneData);
         }
       } else {
@@ -318,6 +505,9 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
           assistantMessageId,
           status: 'failed',
         });
+      }
+      if (savedSourceCount > 0) {
+        console.info(`[liuyao] 已保存 ${savedSourceCount} 条来源快照（消息 ${assistantMessageId}）`);
       }
 
       if (result.errorDetail) {

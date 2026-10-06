@@ -22,7 +22,7 @@ import {
   type CalendarContext,
   type ChartResult,
   type DayBoundary,
-} from 'liuyao-paipan';
+} from './vendor/paipan/index.ts';
 
 export type ChartErrorCode =
   | 'chart_input_incomplete'
