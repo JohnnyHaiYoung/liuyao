@@ -73,6 +73,8 @@
 - `PHASE4_PROMPT_VERSION = 'phase4-v1'`（`app/src/server/prompt.ts`），删除"尚未接入 Wiki/排盘"的旧陈述，明确系统规则/只读证据/不可改写盘面/用户问题的边界，要求末段以「最终结果：」开头；阶段 1 的 `phase1-v1` 保留供历史回溯。
 - **默认 DeepSeek 官方 `deepseek-flash`**；新增 `app/src/server/llm/qwen.ts` 适配阿里云百炼 `qwen3.7-plus`：只有配置 `QWEN_API_KEY`/`DASHSCOPE_API_KEY` 时 `listModels()` 才非空，未配置时请求被明确拒绝，**默认模型不受影响**；两家各自解析流式增量、终止标记、错误体与用量（不共用判断）。
 - 假模型（`LIUYAO_FAKE_MODEL=1`）只用于离线验收，不联网、不产生费用，**不冒充**真实 API 联调。
+- **配置模板**：仓库根 [`.env.example`](../.env.example) 已记录 DeepSeek 与千问两套变量（`DEEPSEEK_API_KEY`、`LLM_BASE_URL`/`LLM_MODEL`、`QWEN_API_KEY`|`DASHSCOPE_API_KEY`、`QWEN_BASE_URL`、`QWEN_MODEL`）；实际生效文件是 **`app/.env.local`**（Next 自动加载，已被 `.gitignore` 忽略），改后需重启服务。
+  实测：在 `app/.env.local` 同时配置 `DEEPSEEK_API_KEY` 与 `QWEN_API_KEY` 后，真实 `next start` 服务的 `GET /api/models` 返回 `deepseek-flash`（默认）与 `qwen3.7-plus` 两项。
 
 ## 7. 固定样例与实际结果
 
