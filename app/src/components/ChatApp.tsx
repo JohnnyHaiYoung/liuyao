@@ -9,9 +9,12 @@ import {
   type ConversationSummary,
   type MessageDto,
   type OwnerInfo,
+  type SseChartData,
+  type SseSourceRefData,
 } from '@/shared/types';
 import { ApiRequestError, api, newClientId, streamChat } from '@/lib/api-client';
 import { MarkdownContent } from './MarkdownContent';
+import { MessageEvidence } from './MessageEvidence';
 
 /**
  * 聊天主界面（客户端组件）。
@@ -100,6 +103,9 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string>(() => newClientId());
   const [messages, setMessages] = useState<MessageDto[]>([]);
+  // 阶段 4：本次回答的盘面与依据（来自服务端 SSE 事件；历史消息则读 MessageDto 快照）
+  const [liveChart, setLiveChart] = useState<SseChartData | null>(null);
+  const [liveSources, setLiveSources] = useState<SseSourceRefData[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [composer, setComposer] = useState('');
@@ -333,6 +339,8 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
         {
           onStart: (data) => {
             startedStream = true;
+            setLiveChart(null);
+            setLiveSources([]);
             setMessages((prev) =>
               prev.map((item) => (item.id === localUserId ? { ...item, id: data.userMessageId } : item)),
             );
@@ -343,6 +351,13 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
                 ),
               );
             }
+          },
+          onSources: (data) => {
+            // 只保存服务端验证过的出处；模型正文里的 Sx 一律不参与渲染
+            setLiveSources(data.sources ?? []);
+          },
+          onChart: (data) => {
+            setLiveChart(data);
           },
           onDelta: (data) => {
             setStreamText((prev) => prev + data.text);
@@ -759,6 +774,17 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
                 {loadingMessages ? '加载中…' : '加载更早的消息'}
               </button>
             </div>
+          ) : null}
+
+          {(liveChart || liveSources.length > 0 || messages.some((item) => item.chart || (item.sources ?? []).length > 0)) ? (
+            <MessageEvidence
+              chart={liveChart ?? [...messages].reverse().find((item) => item.chart)?.chart ?? null}
+              sources={
+                liveSources.length > 0
+                  ? liveSources
+                  : ([...messages].reverse().find((item) => (item.sources ?? []).length > 0)?.sources ?? [])
+              }
+            />
           ) : null}
 
           {messages.map((message) => {

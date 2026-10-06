@@ -629,3 +629,32 @@ textarea {
     padding-right: 12px;
   }
 }
+
+/* ── 阶段 4：盘面与依据展示（MessageEvidence） ── */
+.message-evidence {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #d8d8d8);
+  border-radius: 8px;
+  background: var(--surface-muted, #fafafa);
+  font-size: 13px;
+}
+.message-evidence .evidence-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.message-evidence .evidence-line { margin: 2px 0; }
+.message-evidence .evidence-sources { margin-top: 8px; }
+.message-evidence .evidence-list { margin: 0; padding-left: 18px; }
+.message-evidence .evidence-list li { margin: 3px 0; }
+.message-evidence a { text-decoration: underline; }
+.message-evidence .badge.warn {
+  margin-left: 6px;
+  background: #fff4d6;
+  border: 1px solid #e0b400;
+  border-radius: 4px;
+  padding: 0 4px;
+}

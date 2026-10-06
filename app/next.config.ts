@@ -11,6 +11,16 @@ import type { NextConfig } from 'next';
  */
 const nextConfig: NextConfig = {
   serverExternalPackages: ['better-sqlite3'],
+  // 阶段 4：服务端会在运行时按动态路径读取 wiki/、corpus/（目录选页、来源片段、原页图），
+  // Next 的静态分析因此会把整个项目纳入追踪，导致 standalone 产物里可能带上聊天库、
+  // 资料原件与临时目录。这里显式排除私密/体积大的目录：
+  //   · storage/：聊天 SQLite（含 WAL）与临时验证目录，绝不能进产物
+  //   · corpus/originals/：原书原件（版权与体积）
+  //   · dist/、.git/：发布归档与版本库
+  // 运行时仍从项目目录读取这些文件（next start 部署方式），因此排除不影响功能。
+  outputFileTracingExcludes: {
+    '*': ['./storage/**', './corpus/originals/**', './dist/**', './.git/**', './storage/tmp/**'],
+  },
   poweredByHeader: false,
   reactStrictMode: true,
 };

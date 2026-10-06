@@ -2,6 +2,7 @@ import {
   ERROR_CODES,
   errorMessageFor,
   type ApiErrorBody,
+  type ChatChartInput,
   type ConversationDetailResponse,
   type ConversationListResponse,
   type CreateConversationResponse,
@@ -9,9 +10,11 @@ import {
   type LoginResponse,
   type MeResponse,
   type MessageListResponse,
+  type SseChartData,
   type SseDeltaData,
   type SseDoneData,
   type SseErrorData,
+  type SseSourcesData,
   type SseStartData,
 } from '@/shared/types';
 
@@ -172,6 +175,10 @@ export function createSseParser(onFrame: (frame: SseFrame) => void): {
 
 export interface ChatStreamHandlers {
   onStart?: (data: SseStartData) => void;
+  /** 阶段 4：服务端已选中的本地证据（含可点击出处；模型不能注入） */
+  onSources?: (data: SseSourcesData) => void;
+  /** 阶段 4：本次回答绑定的盘面（新盘或沿用的旧盘快照） */
+  onChart?: (data: SseChartData) => void;
   onDelta?: (data: SseDeltaData) => void;
   onDone?: (data: SseDoneData) => void;
   onError?: (data: SseErrorData) => void;
@@ -182,6 +189,10 @@ export interface ChatStreamParams {
   clientMessageId: string;
   content: string;
   model?: string;
+  /** 阶段 4：可选的结构化排盘输入（服务端会重新校验） */
+  chartInput?: ChatChartInput | null;
+  /** 'new' 表示用户明确要求另起一卦 */
+  chartAction?: 'auto' | 'new';
   signal: AbortSignal;
 }
 
@@ -202,6 +213,8 @@ export async function streamChat(params: ChatStreamParams, handlers: ChatStreamH
         clientMessageId: params.clientMessageId,
         content: params.content,
         ...(params.model ? { model: params.model } : {}),
+        ...(params.chartInput ? { chartInput: params.chartInput } : {}),
+        ...(params.chartAction ? { chartAction: params.chartAction } : {}),
       }),
       signal: params.signal,
     },
@@ -226,6 +239,12 @@ export async function streamChat(params: ChatStreamParams, handlers: ChatStreamH
     switch (event) {
       case 'start':
         handlers.onStart?.(payload as SseStartData);
+        break;
+      case 'sources':
+        handlers.onSources?.(payload as SseSourcesData);
+        break;
+      case 'chart':
+        handlers.onChart?.(payload as SseChartData);
         break;
       case 'delta':
         handlers.onDelta?.(payload as SseDeltaData);
