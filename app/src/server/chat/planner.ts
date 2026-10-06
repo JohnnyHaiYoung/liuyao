@@ -55,8 +55,19 @@ const CAST_REQUEST_MARKERS = [
   '看一卦', '帮我看卦', '帮我看看卦', '请帮我看卦', '看个卦', '看下卦', '看一下卦',
   '起卦看看', '给我起卦', '换个卦',
 ];
-/** 元问题（在问"起卦/断卦是什么、怎么比较"）不算起卦请求。 */
-const CONCEPT_GUARD = ['比较', '区别', '差异', '什么是', '是什么意思', '怎么理解', '如何理解', '介绍一下', '原理', '来源', '出自'];
+/**
+ * 方法/知识类问法：只有在"比较/定义"词与**方法或知识术语**相邻时才算元问题。
+ *
+ * 复验报告（bbb54b5）P1：先前用 ['比较','来源',…] 做整体排除，导致
+ * 「帮我起卦，比较两份工作机会」「请帮我起卦，看看收入来源如何」——那里的"比较/来源"是**起卦的对象或目的**，
+ * 不是在被比较的六爻方法本身——被误判为 source_comparison，绕过缺项追问。
+ * 现在只有"梅花/六爻/断卦/…"这类术语与"比较/区别/是什么"邻近时才判为元问题。
+ */
+const METHOD_TERMS = '梅花|六爻|断卦|起卦法|起卦方式|易数|纳甲|用神|流派|断法|卦理|体系|方法|资料|Wiki';
+const METHOD_COMPARISON_PATTERN = new RegExp(
+  `(?:${METHOD_TERMS})[^。；！？]{0,8}(?:比较|区别|差异|是什么|怎么理解|如何理解|原理|介绍一下)` +
+    `|(?:比较|区别|差异|什么是|是什么意思|怎么理解|如何理解|介绍一下)[^。；！？]{0,8}(?:${METHOD_TERMS})`,
+);
 
 export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const question = String(params.question ?? '');
@@ -116,8 +127,8 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 3.5) 起卦/新卦请求但**完全没有输入**：只澄清，不调用模型（任务书第 2 节）。
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
-  const isMetaQuestion = CONCEPT_GUARD.some((marker) => question.includes(marker));
-  const wantsCast = !isMetaQuestion && CAST_REQUEST_MARKERS.some((marker) => question.includes(marker));
+  const isMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
+  const wantsCast = !isMethodQuestion && CAST_REQUEST_MARKERS.some((marker) => question.includes(marker));
   if ((wantsCast || wantsNewChart) && !hasAnyChartInput) {
     reasons.push(
       wantsNewChart

@@ -92,9 +92,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（含纯起卦请求与比较类问法的区分）、引用校验、上下文装配、注入边界 | **39/39** |
+| `npm --prefix app run check:orchestration` | 意图判定（纯起卦、**混合问法**、方法类比较的区分）、引用校验、上下文装配、注入边界 | **42/42** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 纯起卦澄清 + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **39/39** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 纯/混合起卦澄清（无盘、无候选、无上游）+ 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **41/41** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游） | 21/21 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `npm --prefix app run check:phase1-regression` | 起真实服务跑既有阶段 1 验收 | 8/8（内含 37/37） |
@@ -122,6 +122,15 @@
 **本次复验实测**：`check:orchestration` **39/39**、`check:e2e` **39/39**、其余套件不变（wiki 17/17+28/28、chart 32/32、migration 30/30、qwen 21/21、vendor 11/11）、`check:phase1-regression` **8/8**（内含阶段 1 **37/37**）、`typecheck` 与 `next build` exit 0。
 
 **仍未覆盖的验证**：UI 侧的模型切换竞态只能由代码结构（ref）+ HTTP 断言间接保证，没有浏览器级自动化（本仓库无前端测试框架）；跨会话切换后的页面表现同理需要人工或浏览器级复验。
+
+## 9.6 针对再次复验（`bbb54b5`）P1 的修复（2026-10-06）
+
+| 项 | 原因 | 修复与证据 |
+| --- | --- | --- |
+| P1 起卦请求含"比较/来源"等词时仍被误判 | `planner.ts` 的元问题排除用 `['比较','区别','来源',…]` 做**整体**排除，于是「帮我起卦，比较两份工作机会」「请帮我起卦，看看收入来源如何」——那里的"比较/来源"是**起卦的对象或目的**——被判为 `source_comparison`，绕过缺项追问 | 改为 `METHOD_COMPARISON_PATTERN`：只有当"比较/区别/是什么/怎么理解…"与**方法或知识术语**（梅花/六爻/断卦/起卦法/易数/纳甲/用神/流派/方法/资料/Wiki…）在 8 字内相邻时才算元问题；显式起卦动作优先。实测两条复验样例 → `intent=chart`、`missingInputs=lineValues,castTime,timezone`、本地澄清；`梅花起卦与六爻断卦怎么比较？`、`起卦和断卦的区别是什么？` 仍为资料/概念类，不被误判 |
+| 附带修正：本地澄清仍发候选资料事件 | 候选 `sources` 事件在本地澄清分支之前发出 | 把候选/盘面事件移到**真正调用模型**的分支；澄清路径事件序列为 `start → delta → done`，不出现 `sources`/`chart`，避免"没调用模型却有依据"的误导 |
+
+**本次实测**：`check:orchestration` **42/42**、`check:e2e` **41/41**（含两条混合问法断言"无盘、无候选、无上游调用"）、其余套件不变（wiki 17/17+28/28、chart 32/32、migration 30/30、qwen 21/21、vendor 11/11）、`check:phase1-regression` **8/8**（内含阶段 1 **37/37**）、`typecheck` 与 `next build` exit 0、阶段 2 资料 108 项通过。
 
 ## 10. 第三阶段两处非阻断勘误的修正
 

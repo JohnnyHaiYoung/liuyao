@@ -343,18 +343,10 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
           ...(autoTitle ? { conversationTitle: autoTitle } : {}),
         });
 
-        // 事件顺序固定：start → sources(候选) → chart → delta* → done
-        // 注意：这里是**候选资料**（模型还没输出），带 candidate=true；
-        // 只有 done.sourceIds 过滤后的编号才是最终引用（复验报告 P1-2）。
-        if (evidenceRefs.length > 0) {
-          send('sources', { sources: evidenceRefs, candidate: true });
-        }
-        if (chartEvent) {
-          send('chart', chartEvent);
-        }
-
         if (localReply !== null) {
-          // 缺项澄清由本地逻辑完成：不调用模型，但同样落库并走同一事件契约
+          // 缺项澄清由本地逻辑完成：不调用模型，因此也**不发候选资料/盘面事件**
+          // （没有上游调用就没有引用，候选只会造成"这是本次依据"的误解）。
+          // 事件序列为 start → delta → done。
           assistantText = localReply;
           send('delta', { text: localReply });
           persistPartial(true);
@@ -367,6 +359,15 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
             finishReason: 'local_clarification',
           };
         } else {
+          // 事件顺序固定：start → sources(候选) → chart → delta* → done
+          // 这里是**候选资料**（模型还没输出），带 candidate=true；
+          // 只有 done.sourceIds 过滤后的编号才是最终引用（复验报告 c649c00 P1-2）。
+          if (evidenceRefs.length > 0) {
+            send('sources', { sources: evidenceRefs, candidate: true });
+          }
+          if (chartEvent) {
+            send('chart', chartEvent);
+          }
           result = await provider.streamChat(
             {
               model,

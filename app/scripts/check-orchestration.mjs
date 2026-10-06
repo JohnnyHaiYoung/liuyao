@@ -78,6 +78,23 @@ console.log('=== 1) 意图判定与计划对象 ===');
   }
   const metaComparison = plan('梅花起卦与六爻断卦怎么比较？');
   check('比较类问法不被误判为起卦请求', metaComparison.plan.intent === 'source_comparison' && metaComparison.plan.missingInputs.length === 0, `${metaComparison.plan.intent}/${metaComparison.plan.missingInputs.join(',')}`);
+
+  // 复验报告（bbb54b5）P1：起卦动作优先于"作为对象/目的出现的比较、来源等词"
+  for (const mixed of ['帮我起卦，比较两份工作机会', '请帮我起卦，看看收入来源如何']) {
+    const casting = plan(mixed);
+    const reply = buildMissingInputReply(casting.plan);
+    check(
+      `「${mixed}」→ 起卦优先，先追问缺项`,
+      casting.plan.intent === 'chart' &&
+        casting.plan.chartAction === 'none' &&
+        ['lineValues', 'castTime', 'timezone'].every((item) => casting.plan.missingInputs.includes(item)) &&
+        typeof reply === 'string' &&
+        reply.includes('最终结果：'),
+      `${casting.plan.intent}/${casting.plan.chartAction} missing=${casting.plan.missingInputs.join(',')}`,
+    );
+  }
+  const meta2 = plan('起卦和断卦的区别是什么？');
+  check('真正的方法差别问法仍走资料/概念，不误判为起卦', meta2.plan.intent !== 'chart' && meta2.plan.missingInputs.length === 0, `${meta2.plan.intent}/${meta2.plan.missingInputs.join(',')}`);
 }
 
 console.log('\n=== 2) 引用校验（只认本次选中的编号） ===');
