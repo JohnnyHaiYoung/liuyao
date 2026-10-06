@@ -14,7 +14,10 @@
     "hash-password": "node scripts/hash-password.mjs",
     "db:backup": "node scripts/db-backup.mjs",
     "db:info": "node scripts/db-info.mjs",
-    "verify:phase1": "node scripts/verify-phase1.mjs"
+    "verify:phase1": "node scripts/verify-phase1.mjs",
+    "check:wiki": "node scripts/build-wiki-catalog.mjs --check && node scripts/check-wiki-select.mjs && node scripts/check-source-reader.mjs",
+    "check:chart": "node scripts/check-chart-service.mjs",
+    "check:migration-phase4": "node --import ./scripts/lib/register-ts.mjs scripts/check-migration-phase4.mjs"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

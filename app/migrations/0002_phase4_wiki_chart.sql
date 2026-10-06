@@ -53,6 +53,7 @@ ALTER TABLE conversations ADD COLUMN current_chart_run_id TEXT;
 -- 每条助手消息绑定当时的盘面快照；旧消息保持 NULL（表示"无盘"）
 ALTER TABLE messages ADD COLUMN chart_run_id TEXT;
 
--- 编排层的计划对象与提示版本快照：失败/中断时也能看清当时选页与排盘决策
+-- 编排层的计划对象（意图、选页、排盘决策、缺项与理由）；失败/中断时也能看清当时的决策。
+-- 注意：提示版本字段 `prompt_version` **在 0001_init.sql 中已存在**（阶段 1 就记录模型提示版本），
+-- 本迁移不重复添加；错误码亦沿用既有的 `error_code`，避免与阶段 1 字段重名冲突。
 ALTER TABLE messages ADD COLUMN plan_json TEXT;
-ALTER TABLE messages ADD COLUMN prompt_version TEXT;
