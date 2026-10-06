@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageChartSnapshot, SseChartData, SseSourceRefData } from '@/shared/types';
+import type { MessageChartSnapshot, MessageSourceSnapshot, SseChartData, SseSourceRefData } from '@/shared/types';
 
 /**
  * 本次回答的「盘面 + 依据」展示（阶段 4）。
@@ -9,14 +9,17 @@ import type { MessageChartSnapshot, SseChartData, SseSourceRefData } from '@/sha
  *   - 只渲染**服务端给出**的字段：盘面摘要来自 SSE chart 事件或历史快照，
  *     出处链接来自服务端校验后的 SseSourceRefData.href；
  *   - 绝不解析模型正文里的 Sx 编号、磁盘路径或 URL，因此模型无法凭空造出可点击出处；
- *   - 质量为 needs_review 的来源显示「待核对」，并提供原页图入口（受控接口）。
+ *   - 质量为 needs_review 的来源显示「待核对」，并提供原页图入口（受控接口）；
+ *   - 历史快照还带**当时的摘录与页哈希**（复验报告 P1-4）：展示旧摘录，并明确区分
+ *     "链接指向当前版本 / 摘录是当时版本"。
  */
+type AnySource = SseSourceRefData & Partial<Pick<MessageSourceSnapshot, 'excerpt' | 'pageSha256'>>;
 export function MessageEvidence({
   chart,
   sources,
 }: {
   chart?: SseChartData | MessageChartSnapshot | null;
-  sources?: SseSourceRefData[] | null;
+  sources?: AnySource[] | null;
 }) {
   const chartData = chart && 'summary' in chart ? chart : null;
   const summary = chartData?.summary ?? null;
@@ -76,6 +79,18 @@ export function MessageEvidence({
                       原页图
                     </a>
                   </>
+                ) : null}
+                {source.excerpt ? (
+                  <details className="evidence-excerpt">
+                    <summary>
+                      当时的摘录
+                      {source.pageSha256 ? `（页哈希 ${source.pageSha256.slice(0, 12)}…）` : ''}
+                    </summary>
+                    <pre className="evidence-excerpt-text">{source.excerpt}</pre>
+                    <div className="conversation-meta">
+                      以上是**当时保存**的摘录；上面的链接打开的是**当前**版本。若资料后来被修改，两者可能不同。
+                    </div>
+                  </details>
                 ) : null}
               </li>
             ))}

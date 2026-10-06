@@ -49,6 +49,14 @@ export interface PlanTurnResult {
 
 const FOLLOW_UP_MARKERS = ['这卦', '这个卦', '此卦', '该卦', '刚才那卦', '刚起的卦', '上面那卦', '这盘', '这个盘', '沿用', '还是这卦'];
 const NEW_CHART_MARKERS = ['新卦', '另起', '重新起卦', '再起一卦', '另问一事', '另外一卦'];
+/** 明确的起卦请求用词（不含"起卦"这类可能出现在概念/比较问题里的词，后者由 CONCEPT_GUARD 排除）。 */
+const CAST_REQUEST_MARKERS = [
+  '帮我起卦', '帮我起一卦', '帮起一卦', '起一卦', '摇一卦', '占一卦', '卜一卦',
+  '看一卦', '帮我看卦', '帮我看看卦', '请帮我看卦', '看个卦', '看下卦', '看一下卦',
+  '起卦看看', '给我起卦', '换个卦',
+];
+/** 元问题（在问"起卦/断卦是什么、怎么比较"）不算起卦请求。 */
+const CONCEPT_GUARD = ['比较', '区别', '差异', '什么是', '是什么意思', '怎么理解', '如何理解', '介绍一下', '原理', '来源', '出自'];
 
 export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const question = String(params.question ?? '');
@@ -98,6 +106,36 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
         budgetExceeded: wiki.budgetExceeded,
         promptVersion: params.promptVersion,
         followUpChartRunId,
+        chartError: null,
+      },
+      wiki,
+      chart: null,
+    };
+  }
+
+  // 3.5) 起卦/新卦请求但**完全没有输入**：只澄清，不调用模型（任务书第 2 节）。
+  // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
+  // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
+  const isMetaQuestion = CONCEPT_GUARD.some((marker) => question.includes(marker));
+  const wantsCast = !isMetaQuestion && CAST_REQUEST_MARKERS.some((marker) => question.includes(marker));
+  if ((wantsCast || wantsNewChart) && !hasAnyChartInput) {
+    reasons.push(
+      wantsNewChart
+        ? '识别为"另起一卦"请求，但没有新的爻值/时间输入：先澄清，不调用模型'
+        : '识别为起卦请求，但缺少六爻与时间输入：先澄清，不调用模型',
+    );
+    return {
+      plan: {
+        intent: 'chart',
+        chartAction: 'none',
+        selectedPageIds: wiki.selectedPages.map((page) => page.pageId),
+        selectedSids: wiki.snippets.filter((item) => item.citable).map((item) => item.sid),
+        missingInputs: ['lineValues', 'castTime', 'timezone'],
+        reasons,
+        ambiguities: extraction.ambiguities,
+        budgetExceeded: wiki.budgetExceeded,
+        promptVersion: params.promptVersion,
+        followUpChartRunId: null,
         chartError: null,
       },
       wiki,

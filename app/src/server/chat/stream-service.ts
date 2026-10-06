@@ -343,9 +343,11 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
           ...(autoTitle ? { conversationTitle: autoTitle } : {}),
         });
 
-        // 事件顺序固定：start → sources → chart → delta* → done
+        // 事件顺序固定：start → sources(候选) → chart → delta* → done
+        // 注意：这里是**候选资料**（模型还没输出），带 candidate=true；
+        // 只有 done.sourceIds 过滤后的编号才是最终引用（复验报告 P1-2）。
         if (evidenceRefs.length > 0) {
-          send('sources', { sources: evidenceRefs });
+          send('sources', { sources: evidenceRefs, candidate: true });
         }
         if (chartEvent) {
           send('chart', chartEvent);

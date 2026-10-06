@@ -249,6 +249,9 @@ function attachPhase4Snapshots(db: SqliteDatabase, items: MessageDto[], rows: Me
               href: buildSourceHref(record.sourceId, record.locatorType, record.locatorValue),
               label: `来源 ${record.sourceId} ${record.locatorValue ?? ''}`.trim(),
               needsQualityNotice: record.qualityStatus === 'needs_review',
+              // 复验报告 P1-4：把当时保存的摘录与页哈希一并交给页面，Wiki 更新后仍可核对旧版本
+              excerpt: record.excerpt,
+              pageSha256: record.pageSha256,
             }))
           : null;
       const chartRunId = typeof row.chart_run_id === 'string' && row.chart_run_id !== '' ? row.chart_run_id : null;

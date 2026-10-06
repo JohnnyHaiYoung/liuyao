@@ -74,9 +74,17 @@ export interface MessageDto {
   completedAt: string | null;
   usage: UsageDto | null;
   /** 阶段 4：本次回答的来源快照（历史回看用；旧消息为 null）。 */
-  sources?: SseSourceRefData[] | null;
+  sources?: MessageSourceSnapshot[] | null;
   /** 阶段 4：本次回答绑定的盘面摘要（历史回看用；旧消息为 null，沿用旧盘时为旧盘）。 */
   chart?: MessageChartSnapshot | null;
+}
+
+/** 历史回看用的来源快照：除展示字段外，还带**当时的摘录与页哈希**（复验报告 P1-4）。 */
+export interface MessageSourceSnapshot extends SseSourceRefData {
+  /** 当时保存的摘录（不随 Wiki/清洗文本更新而变化） */
+  excerpt: string;
+  /** 当时页面的 SHA-256（用于识别版本变化） */
+  pageSha256: string;
 }
 
 /** 历史回看用的盘面快照摘要（字段与 SSE chart 事件同源）。 */
@@ -226,6 +234,11 @@ export interface SseSourceRefData {
 
 export interface SseSourcesData {
   sources: SseSourceRefData[];
+  /**
+   * true 表示这是**模型输出之前的候选资料**（服务端已选中但模型尚未引用），
+   * 页面不得把它当作"本次依据"渲染；只有 `done.sourceIds` 过滤后的编号才是最终引用。
+   */
+  candidate?: boolean;
   /** 模型提到但未被本次选页映射的编号（仅供提示，不会渲染成链接）。 */
   unmappedSids?: string[];
 }

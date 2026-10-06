@@ -61,7 +61,15 @@ export class FakeStreamProvider implements LlmProvider {
   }
 
   async streamChat(options: LlmStreamOptions, handlers: LlmStreamHandlers): Promise<LlmStreamResult> {
-    const chunks = Array.from(SCRIPT.join('\n'));
+    // 验收替身行为：若服务端在系统提示里放了编号证据（<wiki-evidence sid="S1" …>），
+    // 假模型就**引用其中的第一个真实编号**，用于端到端验证"候选 ≠ 最终引用"这条链路。
+    // 没有证据时不引用任何编号（不能凭空造出处）。
+    const systemContent = options.messages.find((message) => message.role === 'system')?.content ?? '';
+    const firstSid = /<wiki-evidence[^>]*\bsid="(S\d+)"/.exec(systemContent)?.[1] ?? null;
+    const prefix = firstSid
+      ? [`（验收用假模型输出，未调用任何模型服务）`, '', `按 ${firstSid} 的说法，这里是一段用于验证引用映射的说明。`, '']
+      : [];
+    const chunks = Array.from([...prefix, ...SCRIPT].join('\n'));
     for (let index = 0; index < chunks.length; index += 1) {
       await sleep(CHUNK_DELAY_MS, options.signal);
       if (options.signal.aborted) {

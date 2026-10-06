@@ -61,6 +61,23 @@ console.log('=== 1) 意图判定与计划对象 ===');
 
   const vague = plan('用 878887 起一卦');
   check('含糊爻值 → 进 ambiguities 且不排盘', vague.plan.ambiguities.length > 0 && vague.plan.chartAction !== 'new', vague.plan.ambiguities[0] ?? '');
+
+  // 复验报告 P1-1：单纯请求起卦（完全没有输入）必须只澄清
+  for (const pure of ['帮我起卦', '另起一卦', '请帮我看卦']) {
+    const casting = plan(pure);
+    const reply = buildMissingInputReply(casting.plan);
+    check(
+      `「${pure}」→ intent=chart 且缺项为 lineValues/castTime/timezone`,
+      casting.plan.intent === 'chart' &&
+        casting.plan.chartAction === 'none' &&
+        ['lineValues', 'castTime', 'timezone'].every((item) => casting.plan.missingInputs.includes(item)) &&
+        typeof reply === 'string' &&
+        reply.includes('最终结果：'),
+      `${casting.plan.intent}/${casting.plan.chartAction} missing=${casting.plan.missingInputs.join(',')}`,
+    );
+  }
+  const metaComparison = plan('梅花起卦与六爻断卦怎么比较？');
+  check('比较类问法不被误判为起卦请求', metaComparison.plan.intent === 'source_comparison' && metaComparison.plan.missingInputs.length === 0, `${metaComparison.plan.intent}/${metaComparison.plan.missingInputs.join(',')}`);
 }
 
 console.log('\n=== 2) 引用校验（只认本次选中的编号） ===');

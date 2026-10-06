@@ -105,7 +105,12 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
   const [messages, setMessages] = useState<MessageDto[]>([]);
   // 阶段 4：本次回答的盘面与依据（来自服务端 SSE 事件；历史消息则读 MessageDto 快照）
   const [liveChart, setLiveChart] = useState<SseChartData | null>(null);
+  // 阶段 4：候选资料（模型输出前收到，candidate=true）与**最终引用**（done.sourceIds 过滤后）分开保存，
+  // 避免把"选中的候选"显示成"本次依据"（复验报告 P1-2）。
+  const [liveCandidates, setLiveCandidates] = useState<SseSourceRefData[]>([]);
   const [liveSources, setLiveSources] = useState<SseSourceRefData[]>([]);
+  // 用 ref 保存当前选择的模型：切换后立刻发送也不会用到切换前的值（复验报告 P2-1）
+  const selectedModelRef = useRef<string>(defaultModel);
   // 阶段 4：可选模型由服务端按可用性下发（未配置密钥的提供方不出现）
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; label: string; isDefault?: boolean }>>([]);
   const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
@@ -278,6 +283,10 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
       setBanner(null);
       setActiveId(conversationId);
       setStreamText('');
+      // 切换会话必须立刻清掉上一个会话的流式证据，避免串错（复验报告 P1-3）
+      setLiveChart(null);
+      setLiveSources([]);
+      setLiveCandidates([]);
       setHistoryOpen(false);
       try {
         await loadMessages(conversationId);
@@ -299,6 +308,9 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
     setHasMore(false);
     setNextCursor(null);
     setStreamText('');
+    setLiveChart(null);
+    setLiveSources([]);
+    setLiveCandidates([]);
     setDraftId(newClientId());
     setHistoryOpen(false);
     textareaRef.current?.focus();
@@ -363,12 +375,13 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
 
     try {
       await streamChat(
-        { conversationId, clientMessageId, content, model: selectedModel, signal: controller.signal },
+        { conversationId, clientMessageId, content, model: selectedModelRef.current, signal: controller.signal },
         {
           onStart: (data) => {
             startedStream = true;
             setLiveChart(null);
             setLiveSources([]);
+            setLiveCandidates([]);
             setMessages((prev) =>
               prev.map((item) => (item.id === localUserId ? { ...item, id: data.userMessageId } : item)),
             );
@@ -381,8 +394,13 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
             }
           },
           onSources: (data) => {
-            // 只保存服务端验证过的出处；模型正文里的 Sx 一律不参与渲染
-            setLiveSources(data.sources ?? []);
+            // 只保存服务端验证过的编号；candidate=true 表示"模型尚未引用"，不作为依据渲染
+            if (data.candidate === true) {
+              setLiveCandidates(data.sources ?? []);
+              setLiveSources([]);
+            } else {
+              setLiveSources(data.sources ?? []);
+            }
           },
           onChart: (data) => {
             setLiveChart(data);
@@ -390,8 +408,13 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
           onDelta: (data) => {
             setStreamText((prev) => prev + data.text);
           },
-          onDone: () => {
-            /* 状态以服务端为准，下面统一刷新。 */
+          onDone: (data) => {
+            // 最终依据只保留**服务端确认被引用**的编号（复验报告 P1-2）
+            const referenced = new Set(data.sourceIds ?? []);
+            setLiveCandidates((candidates) => {
+              setLiveSources(candidates.filter((item) => referenced.has(item.sid)));
+              return candidates;
+            });
           },
           onError: (data) => {
             setBanner({
@@ -787,10 +810,11 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
           {bootstrapped && messages.length === 0 && !generating ? (
             <div className="empty-state">
               <h2>可以开始自由提问</h2>
-              <p>本阶段只接通 DeepSeek Flash，尚未接入项目 Wiki 资料与六爻排盘程序。</p>
+              <p>已接通项目 Wiki 小样本资料（6 份）与本地确定性排盘；回答会带可点击出处与盘面摘要。</p>
               <ul>
-                <li>回答不会声称已经读完书籍或已核对原文，也不会编造页码与引文。</li>
-                <li>具体排盘尚不可用；系统会说明缺少的能力与所需输入，但不会编造卦盘。</li>
+                <li>概念与来源问题：按目录读取少量相关 Wiki 片段；引用只来自服务端选中且被模型实际引用的编号。</li>
+                <li>具体卦例：给出六爻值（初爻在前）、起卦时间与时区后由服务端排盘；资料不足时先询问缺项，不会拿发送时间充当起卦时间。</li>
+                <li>本地 Wiki 只有 6 份样本，不是完整六爻知识体系；没有本地依据时会明确说明。</li>
                 <li>生成过程中可以点“停止”；完成、失败、中断状态都会保存到历史。</li>
               </ul>
             </div>
@@ -810,7 +834,12 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
               <select
                 id="model-select"
                 value={selectedModel}
-                onChange={(event) => setSelectedModel(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSelectedModel(next);
+                  // 同步写入 ref：紧接着点发送也不会用到切换前的模型
+                  selectedModelRef.current = next;
+                }}
                 disabled={generating}
               >
                 {availableModels.map((item) => (
@@ -822,17 +851,6 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
               </select>
               <span className="conversation-meta">只有配置了密钥的提供方会出现在这里；切换模型不影响历史引用与旧盘。</span>
             </div>
-          ) : null}
-
-          {(liveChart || liveSources.length > 0 || messages.some((item) => item.chart || (item.sources ?? []).length > 0)) ? (
-            <MessageEvidence
-              chart={liveChart ?? [...messages].reverse().find((item) => item.chart)?.chart ?? null}
-              sources={
-                liveSources.length > 0
-                  ? liveSources
-                  : ([...messages].reverse().find((item) => (item.sources ?? []).length > 0)?.sources ?? [])
-              }
-            />
           ) : null}
 
           {messages.map((message) => {
@@ -866,6 +884,9 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
                     <MarkdownContent text={message.content} />
                   )}
                 </div>
+                {message.role === 'assistant' && (message.chart || (message.sources ?? []).length > 0) ? (
+                  <MessageEvidence chart={message.chart ?? null} sources={message.sources ?? null} />
+                ) : null}
               </article>
             );
           })}
@@ -887,6 +908,9 @@ export function ChatApp({ owner, llmConfigured, defaultModel, fakeMode = false }
                   </>
                 )}
               </div>
+              {liveChart || liveSources.length > 0 ? (
+                <MessageEvidence chart={liveChart} sources={liveSources} />
+              ) : null}
             </article>
           ) : null}
 

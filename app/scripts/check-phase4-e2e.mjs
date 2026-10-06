@@ -127,7 +127,8 @@ console.log('=== 1) 概念问题：「什么是用神？」 ===');
   const done = events.find((item) => item.event === 'done');
   check('事件顺序 start → sources → delta → done', order(names).join(' → ').replace(/delta( → delta)*/, 'delta') === 'start → sources → delta → done', order(names).join(' → '));
   check('start 带阶段 4 提示版本', start?.data?.promptVersion === 'phase4-v1', String(start?.data?.promptVersion));
-  check('sources 事件给出服务端验证的编号与链接', Array.isArray(sources?.data?.sources) && sources.data.sources.length > 0 && sources.data.sources.every((item) => item.href.startsWith('/api/sources/')), sources?.data?.sources?.map((item) => `${item.sid}:${item.sourceId}`).join(' '));
+  check('sources 事件给出服务端验证的编号与链接（且标记为候选）', Array.isArray(sources?.data?.sources) && sources.data.sources.length > 0 && sources.data.sources.every((item) => item.href.startsWith('/api/sources/')) && sources.data.candidate === true, `${sources?.data?.sources?.map((item) => `${item.sid}:${item.sourceId}`).join(' ')} candidate=${sources?.data?.candidate}`);
+  check('模型未引用前不把候选当依据（done.sourceIds 只含实际引用）', Array.isArray(done?.data?.sourceIds) && done.data.sourceIds.every((sid) => sources.data.sources.some((item) => item.sid === sid)), `sourceIds=${JSON.stringify(done?.data?.sourceIds)}`);
   check('本次没有盘面（无 chart 事件、done.chartRunId 为空）', !names.includes('chart') && (done?.data?.chartRunId ?? null) === null, `chartRunId=${String(done?.data?.chartRunId)}`);
   check('done 状态为 completed 且有用量字段', done?.data?.status === 'completed' && 'usage' in (done.data ?? {}), String(done?.data?.status));
 }
@@ -181,6 +182,15 @@ console.log('\n=== 4) 旧卦追问（沿用快照，不重算） ===');
 
 console.log('\n=== 5) 缺项只追问（不调用模型） ===');
 {
+  // 复验报告 P1-1：单纯请求起卦（没有爻值/时间）也必须只澄清，不进入模型
+  for (const pure of ['帮我起卦', '另起一卦', '请帮我看卦']) {
+    const { events, names } = await send(pure);
+    const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
+    const page = listMessages(db, conversationId, { limit: 50 });
+    const last = page.items.at(-1);
+    check(`「${pure}」只澄清、不排盘、不调用模型`, !names.includes('chart') && last?.model === 'local-clarification' && text.includes('最终结果：'), `model=${last?.model} chart=${names.includes('chart')}`);
+  }
+
   const { events, names } = await send('帮我起一卦，爻值 8 7 8 8 8 7');
   const deltas = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
   const page = listMessages(db, conversationId, { limit: 50 });
@@ -195,8 +205,10 @@ console.log('\n=== 6) 无本地命中（不伪造来源） ===');
 {
   const { events, names } = await send('今天天气怎么样？');
   const sources = events.find((item) => item.event === 'sources');
+  const done = events.find((item) => item.event === 'done');
   check('不产生 sources 事件', !names.includes('sources'), names.join(' → '));
   check('仍正常完成对话', names.includes('done'), names.join(' → '));
+  check('无候选时最终引用为空', Array.isArray(done?.data?.sourceIds) && done.data.sourceIds.length === 0, JSON.stringify(done?.data?.sourceIds));
 }
 
 console.log('\n=== 7) 历史回看与 done 一致、旧消息不受影响 ===');
@@ -206,11 +218,29 @@ console.log('\n=== 7) 历史回看与 done 一致、旧消息不受影响 ===');
   check('历史里能找到绑定该盘的助手消息', Boolean(chartMessage), chartMessage ? chartMessage.id.slice(0, 8) + '…' : '未找到');
   check('历史盘面哈希与事件一致', Boolean(chartMessage?.chart) && chartMessage.chart.chartRunId === chartRunId, chartMessage?.chart?.canonicalHash?.slice(0, 12) ?? '');
   const sourcesMessage = page.items.find((item) => (item.sources ?? []).length > 0);
-  check('历史来源快照可读且链接由服务端生成', (sourcesMessage?.sources ?? []).every((item) => item.href.startsWith('/api/sources/')), `${(sourcesMessage?.sources ?? []).length} 条`);
+  // 复验报告 P1-2：这里必须**非空**断言——此前用 (… ?? []).every() 让 0 条也判通过
+  check(
+    '历史来源快照非空，且只含被实际引用的编号',
+    (sourcesMessage?.sources ?? []).length > 0 && sourcesMessage.sources.every((item) => item.sid === 'S1'),
+    `${(sourcesMessage?.sources ?? []).length} 条：${(sourcesMessage?.sources ?? []).map((item) => item.sid).join(',') || '(空)'}`,
+  );
+  check('历史来源快照带当时的摘录与页哈希（P1-4）', (sourcesMessage?.sources ?? []).every((item) => typeof item.excerpt === 'string' && item.excerpt.length > 0 && /^[0-9a-f]{64}$/.test(item.pageSha256)), `${(sourcesMessage?.sources ?? []).map((item) => `${item.sid}:hash=${item.pageSha256.slice(0, 8)}`).join(' ')}`);
+  check('历史来源链接由服务端生成', (sourcesMessage?.sources ?? []).length > 0 && sourcesMessage.sources.every((item) => item.href.startsWith('/api/sources/')), '');
+  const noEvidenceMessage = page.items.filter((item) => item.role === 'assistant' && (item.content ?? '').includes('最终结果：') && (item.sources ?? []).length === 0).length;
+  check('未引用的候选不会写成历史依据', noEvidenceMessage > 0, `无来源的助手消息 ${noEvidenceMessage} 条`);
   const promptVersions = new Set(page.items.filter((item) => item.role === 'assistant' && item.model !== 'local-clarification').map((item) => item.promptVersion));
   check('助手消息记录阶段 4 提示版本', promptVersions.has('phase4-v1'), [...promptVersions].join(','));
   const planRow = db.prepare('SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ? AND plan_json IS NOT NULL').get(conversationId).c;
   check('计划对象已落库（可审计当时决策）', planRow > 0, `${planRow} 条`);
+
+  // 复验报告 P2-1：显式请求的模型必须被如实使用与记录（UI 侧的切换竞态另用 ref 修复）
+  const explicit = await send('这次请按指定模型回答', { requestedModel: 'fake-stream-v1' });
+  const explicitMessage = listMessages(db, conversationId, { limit: 5 }).items.at(-1);
+  check(
+    '显式请求的模型被如实使用并写入历史',
+    explicit.names.includes('done') && explicitMessage?.model === 'fake-stream-v1',
+    `model=${explicitMessage?.model} events=${explicit.names.slice(0, 3).join('→')}`,
+  );
 }
 
 console.log('\n=== 8) 正式库未被改动 ===');
