@@ -15,6 +15,7 @@ import { buildTurnContext, type TurnContext } from './context';
 import { buildSourceHref, validateCitations } from './citations';
 import { buildMissingInputReply, planTurn, type PlanObject } from './planner';
 import * as chartSnapshots from '../chart/snapshots';
+import { summarizeChart, summarizeStoredChart } from '../chart/summary';
 import type { ChartInput } from '../chart/service';
 import { PHASE4_SYSTEM_PROMPT } from '../prompt';
 import type { ChatChartInput, SseChartData, SseSourceRefData } from '@/shared/types';
@@ -241,32 +242,30 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
     }
   }
 
-  const chartEvent: SseChartData | null =
-    chartRunId && planned?.chart && planned.chart.ok
-      ? {
-          action: plan?.chartAction === 'follow_up' ? 'follow_up' : 'new',
-          chartRunId,
-          canonicalHash: planned.chart.canonicalHash,
-          ruleProfileVersion: planned.chart.ruleProfileVersion,
-          coreVersion: planned.chart.coreVersion,
-          summary: {
-            originalHexagram: planned.chart.chart.chart.original.name,
-            changedHexagram: planned.chart.chart.chart.changed?.name ?? null,
-            movingPositions: planned.chart.chart.input.movingPositions,
-            palace: `${planned.chart.chart.chart.palace.name}宫`,
-            palaceStage: planned.chart.chart.chart.palace.stage,
-            shiPosition: planned.chart.chart.chart.shiPosition,
-            yingPosition: planned.chart.chart.chart.yingPosition,
-            dayGanzhi: planned.chart.calendar.dayGanzhi,
-            monthBranch: planned.chart.calendar.monthBranch,
-            monthGanzhi: planned.chart.calendar.monthGanzhi ?? null,
-            voidBranches: planned.chart.chart.chart.voidBranches ?? [],
-            castAt: planned.chart.calendar.localCivilTime ?? null,
-            timezone: planned.chart.calendar.timezone ?? null,
-            dayBoundary: planned.chart.calendar.dayBoundary ?? null,
-          },
-        }
-      : null;
+  // 盘面事件：新盘用服务端刚算出的结果；沿用旧盘则**从快照还原摘要**（不重算）
+  const chartEvent: SseChartData | null = (() => {
+    if (plan?.chartAction === 'follow_up' && currentChartRun) {
+      const restored = summarizeStoredChart(currentChartRun.chartJson, {
+        chartRunId: currentChartRun.id,
+        canonicalHash: currentChartRun.canonicalHash,
+        ruleProfileVersion: currentChartRun.ruleProfileVersion,
+        coreVersion: currentChartRun.coreVersion,
+        action: 'follow_up',
+      });
+      return restored;
+    }
+    if (chartRunId && planned?.chart && planned.chart.ok) {
+      return {
+        action: 'new',
+        chartRunId,
+        canonicalHash: planned.chart.canonicalHash,
+        ruleProfileVersion: planned.chart.ruleProfileVersion,
+        coreVersion: planned.chart.coreVersion,
+        summary: summarizeChart(planned.chart.chart as unknown as Parameters<typeof summarizeChart>[0]),
+      };
+    }
+    return null;
+  })();
 
   const systemContent = turnContext?.systemPrompt ?? PHASE4_SYSTEM_PROMPT;
   const llmMessages = [{ role: 'system' as const, content: systemContent }, ...history];

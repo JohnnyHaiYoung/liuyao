@@ -94,7 +94,12 @@ console.log('\n=== 3) 上下文装配 ===');
   const context = buildTurnContext({ question: '什么是用神？', wiki: concept.wiki, chart: null, followUpChart: null });
   check('系统提示为阶段 4 版本', context.systemPrompt.includes(PHASE4_SYSTEM_PROMPT.slice(0, 24)), '');
   check('证据以带编号的只读标签给出', context.systemPrompt.includes('<wiki-evidence') && /sid="S\d+"/.test(context.systemPrompt), context.evidenceSids.join(','));
-  check('不可引用片段不占编号也不进上下文', concept.wiki.snippets.filter((item) => !item.citable).every((item) => !context.systemPrompt.includes(`sid="${item.sid}"`)), `丢弃 ${context.droppedNonCitable} 条`);
+  check(
+    '不可引用片段不占编号，但作为“无定位背景”进入上下文并标注不可引用',
+    concept.wiki.snippets.filter((item) => !item.citable).every((item) => !context.systemPrompt.includes(`sid="${item.sid}"`)) &&
+      (concept.wiki.snippets.some((item) => !item.citable) ? context.systemPrompt.includes('<wiki-background not-citable="true"') : true),
+    `丢弃编号 ${context.droppedNonCitable} 条；背景段${context.systemPrompt.includes('<wiki-background') ? '已' : '未'}包含`,
+  );
   check('无盘时明确说明没有盘面', context.systemPrompt.includes('本次没有盘面'), '');
 
   const withChart = plan('帮我看看这卦：爻值 8 7 8 8 8 7，2006-05-10 14:22，北京时间');

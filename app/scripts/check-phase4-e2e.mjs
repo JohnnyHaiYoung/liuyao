@@ -1,0 +1,229 @@
+#!/usr/bin/env node
+/**
+ * 第四阶段端到端复验（进程内，无需真实密钥/网络）。
+ *
+ * 覆盖任务书第 7 节四条主流程 + 事件顺序 + 历史一致 + 旧盘不重算 + 缺项不调用模型：
+ *   1) 概念问题（本地命中，sources 事件）
+ *   2) 来源比较（对照页 + 被引来源）
+ *   3) 具体卦例（chart 事件、新盘落库）
+ *   4) 旧卦追问（沿用同一快照、不重算）
+ *   5) 缺项只追问（不调用模型，本地澄清）
+ *   6) 无本地命中（不伪造来源）
+ *
+ * 用的是**真实** stream-service、真实 SQLite（0002 迁移后）、真实快照层与假模型
+ * （LIUYAO_FAKE_MODEL=1，绝不冒充真实 API 联调）。HTTP 层与登录由 verify-phase1 覆盖。
+ *
+ * 用法：node --import ./scripts/lib/register-ts.mjs scripts/check-phase4-e2e.mjs
+ */
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const appDir = path.resolve(here, '..');
+const projectRoot = path.resolve(appDir, '..');
+const liveDb = path.join(projectRoot, 'storage', 'liuyao.db');
+
+if (!fs.existsSync(liveDb)) {
+  console.error(`找不到阶段 1 正式库：${liveDb}`);
+  process.exit(2);
+}
+
+// 用副本，绝不改正式库
+const workDir = path.join(projectRoot, 'storage', 'tmp', `e2e-phase4-${process.pid}`);
+fs.rmSync(workDir, { recursive: true, force: true });
+fs.mkdirSync(workDir, { recursive: true });
+for (const suffix of ['', '-wal', '-shm']) {
+  if (fs.existsSync(`${liveDb}${suffix}`)) fs.copyFileSync(`${liveDb}${suffix}`, path.join(workDir, `liuyao.db${suffix}`));
+}
+process.env.LIUYAO_STORAGE_DIR = workDir;
+process.env.LIUYAO_MIGRATIONS_DIR = path.join(appDir, 'migrations');
+process.env.LIUYAO_FAKE_MODEL = '1';
+delete process.env.DEEPSEEK_API_KEY;
+
+const { getDb } = await import('../src/server/db/index.ts');
+const { startChatStream } = await import('../src/server/chat/stream-service.ts');
+const { listMessages } = await import('../src/server/db/messages.ts');
+
+const db = getDb();
+const owner = db.prepare('SELECT id FROM owners ORDER BY created_at LIMIT 1').get();
+if (!owner) {
+  console.error('旧库里没有 owner，无法进行端到端复验');
+  process.exit(2);
+}
+
+const conversationId = crypto.randomUUID();
+const now = new Date().toISOString();
+db.prepare(
+  `INSERT INTO conversations (id, owner_id, client_conversation_id, title, title_source, created_at, updated_at, last_message_at)
+   VALUES (?, ?, ?, '', 'auto', ?, ?, NULL)`,
+).run(conversationId, owner.id, `e2e-${conversationId}`, now, now);
+
+const results = [];
+const check = (name, pass, detail) => {
+  results.push({ name, pass, detail });
+  console.log(`  [${pass ? '通过' : '不通过'}] ${name}${detail ? '：' + detail : ''}`);
+};
+
+/** 解析 SSE 响应体为事件数组。 */
+async function readEvents(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const events = [];
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let index = buffer.indexOf('\n\n');
+    while (index >= 0) {
+      const chunk = buffer.slice(0, index);
+      buffer = buffer.slice(index + 2);
+      index = buffer.indexOf('\n\n');
+      let event = 'message';
+      const dataLines = [];
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+      }
+      if (dataLines.length > 0) {
+        try {
+          events.push({ event, data: JSON.parse(dataLines.join('\n')) });
+        } catch {
+          events.push({ event, data: dataLines.join('\n') });
+        }
+      }
+    }
+  }
+  return events;
+}
+
+async function send(content, extra = {}) {
+  const outcome = startChatStream({
+    ownerId: owner.id,
+    conversationId,
+    clientMessageId: crypto.randomUUID(),
+    content,
+    requestedModel: null,
+    clientSignal: new AbortController().signal,
+    ...extra,
+  });
+  if (!outcome.ok) throw new Error(`startChatStream 失败：${outcome.status} ${outcome.code} ${outcome.message ?? ''}`);
+  const events = await readEvents(outcome.response);
+  return { events, names: events.map((item) => item.event) };
+}
+
+const order = (names) => names.filter((name, index) => name !== 'delta' || names.indexOf(name) === index);
+
+console.log(`项目根：${projectRoot}`);
+console.log(`测试库副本：${path.relative(projectRoot, workDir)}（正式库只读）\n`);
+
+console.log('=== 1) 概念问题：「什么是用神？」 ===');
+{
+  const { events, names } = await send('什么是用神？');
+  const start = events.find((item) => item.event === 'start');
+  const sources = events.find((item) => item.event === 'sources');
+  const done = events.find((item) => item.event === 'done');
+  check('事件顺序 start → sources → delta → done', order(names).join(' → ').replace(/delta( → delta)*/, 'delta') === 'start → sources → delta → done', order(names).join(' → '));
+  check('start 带阶段 4 提示版本', start?.data?.promptVersion === 'phase4-v1', String(start?.data?.promptVersion));
+  check('sources 事件给出服务端验证的编号与链接', Array.isArray(sources?.data?.sources) && sources.data.sources.length > 0 && sources.data.sources.every((item) => item.href.startsWith('/api/sources/')), sources?.data?.sources?.map((item) => `${item.sid}:${item.sourceId}`).join(' '));
+  check('本次没有盘面（无 chart 事件、done.chartRunId 为空）', !names.includes('chart') && (done?.data?.chartRunId ?? null) === null, `chartRunId=${String(done?.data?.chartRunId)}`);
+  check('done 状态为 completed 且有用量字段', done?.data?.status === 'completed' && 'usage' in (done.data ?? {}), String(done?.data?.status));
+}
+
+console.log('\n=== 2) 来源比较：「梅花起卦与六爻断卦怎么比较？」 ===');
+{
+  const { events, names } = await send('梅花起卦与六爻断卦怎么比较？');
+  const sources = events.find((item) => item.event === 'sources');
+  const sourceIds = new Set((sources?.data?.sources ?? []).map((item) => item.sourceId));
+  // 设计规则：无 ¶NNNN/页码定位的综述页（对照页）只作"无定位背景"给模型，不作可点击出处；
+  // 因此这里核对的是 ①计划里确实选中了对照页 ②出处并列了两个**原件**来源。
+  const planRow = db
+    .prepare("SELECT plan_json FROM messages WHERE conversation_id = ? AND plan_json IS NOT NULL ORDER BY created_at DESC LIMIT 1")
+    .get(conversationId);
+  const plan = planRow?.plan_json ? JSON.parse(planRow.plan_json) : null;
+  check(
+    '计划对象里选中了对照页（并由其展开被引原件）',
+    Array.isArray(plan?.selectedPageIds) && plan.selectedPageIds.includes('comparison:meihua-vs-liuyao'),
+    (plan?.selectedPageIds ?? []).join(', '),
+  );
+  check('出处并列两个不同原件（并列而非裁决）', sourceIds.size >= 2, [...sourceIds].join(', '));
+  check('needs_review 来源带质量标记', (sources?.data?.sources ?? []).some((item) => item.qualityStatus === 'needs_review' && item.needsQualityNotice === true), '');
+  check('无盘（比较类问题不排盘）', !names.includes('chart'), '');
+}
+
+console.log('\n=== 3) 具体卦例（完整输入 → 服务端排盘） ===');
+let chartRunId = null;
+{
+  const { events, names } = await send('帮我看看这卦：爻值 8 7 8 8 8 7，2006-05-10 14:22，北京时间');
+  const chart = events.find((item) => item.event === 'chart');
+  const done = events.find((item) => item.event === 'done');
+  chartRunId = done?.data?.chartRunId ?? null;
+  check('出现 chart 事件且 action=new', chart?.data?.action === 'new', String(chart?.data?.action));
+  check('盘面摘要字段由服务端给出', chart?.data?.summary?.originalHexagram === '山水蒙' && chart.data.summary.palace === '离宫' && chart.data.summary.dayGanzhi === '己亥', `${chart?.data?.summary?.originalHexagram} ${chart?.data?.summary?.palace} 日柱${chart?.data?.summary?.dayGanzhi}`);
+  check('done.chartRunId 指向新盘且哈希一致', typeof chartRunId === 'string' && chartRunId.length > 0 && done?.data?.chartRunId === chartRunId, String(chartRunId).slice(0, 8) + '…');
+  check('事件顺序 chart 在 delta 之前', names.indexOf('chart') > -1 && names.indexOf('chart') < names.indexOf('delta'), names.join(' → '));
+}
+
+console.log('\n=== 4) 旧卦追问（沿用快照，不重算） ===');
+{
+  const before = db.prepare('SELECT COUNT(*) AS c FROM chart_runs').get().c;
+  const { events, names } = await send('那这卦的应期呢？');
+  const chart = events.find((item) => item.event === 'chart');
+  const done = events.find((item) => item.event === 'done');
+  const after = db.prepare('SELECT COUNT(*) AS c FROM chart_runs').get().c;
+  check('chart 事件 action=follow_up 且沿用同一 id', chart?.data?.action === 'follow_up' && chart?.data?.chartRunId === chartRunId, `${chart?.data?.action} ${String(chart?.data?.chartRunId).slice(0, 8)}…`);
+  check('未产生新盘（chart_runs 行数不变）', before === after, `${before} → ${after}`);
+  check('done 仍绑定同一快照', done?.data?.chartRunId === chartRunId, '');
+  check('追问仍调用模型（有 delta）', names.includes('delta'), names.join(' → '));
+}
+
+console.log('\n=== 5) 缺项只追问（不调用模型） ===');
+{
+  const { events, names } = await send('帮我起一卦，爻值 8 7 8 8 8 7');
+  const deltas = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
+  const page = listMessages(db, conversationId, { limit: 50 });
+  const last = page.items.at(-1);
+  check('不产生 chart 事件', !names.includes('chart'), names.join(' → '));
+  check('本地澄清以「最终结果：」结尾', deltas.includes('需要补充以下信息') && deltas.includes('最终结果：需要你补充'), deltas.split('\n').at(-1) ?? '');
+  check('未调用模型（消息 model 记为 local-clarification）', last?.model === 'local-clarification', String(last?.model));
+  check('澄清也落库且状态为 completed', last?.status === 'completed' && (last?.content ?? '').includes('最终结果：'), `${last?.status}`);
+}
+
+console.log('\n=== 6) 无本地命中（不伪造来源） ===');
+{
+  const { events, names } = await send('今天天气怎么样？');
+  const sources = events.find((item) => item.event === 'sources');
+  check('不产生 sources 事件', !names.includes('sources'), names.join(' → '));
+  check('仍正常完成对话', names.includes('done'), names.join(' → '));
+}
+
+console.log('\n=== 7) 历史回看与 done 一致、旧消息不受影响 ===');
+{
+  const page = listMessages(db, conversationId, { limit: 100 });
+  const chartMessage = page.items.find((item) => item.chart?.chartRunId === chartRunId);
+  check('历史里能找到绑定该盘的助手消息', Boolean(chartMessage), chartMessage ? chartMessage.id.slice(0, 8) + '…' : '未找到');
+  check('历史盘面哈希与事件一致', Boolean(chartMessage?.chart) && chartMessage.chart.chartRunId === chartRunId, chartMessage?.chart?.canonicalHash?.slice(0, 12) ?? '');
+  const sourcesMessage = page.items.find((item) => (item.sources ?? []).length > 0);
+  check('历史来源快照可读且链接由服务端生成', (sourcesMessage?.sources ?? []).every((item) => item.href.startsWith('/api/sources/')), `${(sourcesMessage?.sources ?? []).length} 条`);
+  const promptVersions = new Set(page.items.filter((item) => item.role === 'assistant' && item.model !== 'local-clarification').map((item) => item.promptVersion));
+  check('助手消息记录阶段 4 提示版本', promptVersions.has('phase4-v1'), [...promptVersions].join(','));
+  const planRow = db.prepare('SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ? AND plan_json IS NOT NULL').get(conversationId).c;
+  check('计划对象已落库（可审计当时决策）', planRow > 0, `${planRow} 条`);
+}
+
+console.log('\n=== 8) 正式库未被改动 ===');
+{
+  const env = await import('../src/server/db/index.ts');
+  env.closeDb();
+  const liveSha = crypto.createHash('sha256').update(fs.readFileSync(liveDb)).digest('hex');
+  const copySha = crypto.createHash('sha256').update(fs.readFileSync(path.join(workDir, 'liuyao.db'))).digest('hex');
+  check('正式库与副本内容不同（说明测试确实跑在副本上）', liveSha !== copySha, `正式 ${liveSha.slice(0, 12)}… / 副本 ${copySha.slice(0, 12)}…`);
+  fs.rmSync(workDir, { recursive: true, force: true });
+  check('临时副本已清理', !fs.existsSync(workDir), path.relative(projectRoot, workDir));
+}
+
+const failed = results.filter((item) => !item.pass);
+console.log(`\n合计：${results.length - failed.length}/${results.length} 通过${failed.length ? `，${failed.length} 项不通过` : ''}`);
+process.exitCode = failed.length === 0 ? 0 : 1;

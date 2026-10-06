@@ -42,6 +42,7 @@ const DATA_BOUNDARY_NOTICE =
 /** 只把可引用片段作为编号证据交给模型；不可引用片段不占预算也不出现编号。 */
 export function buildTurnContext(input: TurnContextInput): TurnContext {
   const citable = input.wiki.snippets.filter((item) => item.citable);
+  const background = input.wiki.snippets.filter((item) => !item.citable);
   const blocks: string[] = [];
   let used = 0;
   let truncated = false;
@@ -56,6 +57,19 @@ export function buildTurnContext(input: TurnContextInput): TurnContext {
     used += block.length;
     usedSids.push(snippet.sid);
     blocks.push(block);
+  }
+
+  // 选中但**没有可回到原件定位**的片段：仍然给模型看（否则像"对照页"这类综述性内容
+  // 会完全进不了上下文），但明确标注"不可引用、无定位"，且不占编号、不能成为出处。
+  const backgroundBlocks: string[] = [];
+  for (const snippet of background) {
+    const block = `<wiki-background not-citable="true" reason="${snippet.reason}" wiki-page="${snippet.pagePath}" source="${snippet.sourceId ?? '未知'}">\n${snippet.excerpt.slice(0, 800)}\n</wiki-background>`;
+    if (used + block.length > MAX_EVIDENCE_CHARS) {
+      truncated = true;
+      break;
+    }
+    used += block.length;
+    backgroundBlocks.push(block);
   }
 
   const evidenceSection =
@@ -88,6 +102,14 @@ export function buildTurnContext(input: TurnContextInput): TurnContext {
     '',
     '## 只读 Wiki 证据',
     evidenceSection,
+    backgroundBlocks.length > 0
+      ? [
+          '',
+          '## 只读背景资料（**无原件定位，不得作为出处**）',
+          '以下片段来自已选中的 Wiki 页面，但没有 `¶NNNN`/页码定位，因此**不能**用 Sx 编号引用，只能用于理解上下文；回答里不得把它们说成"已核对的原文"。',
+          backgroundBlocks.join('\n'),
+        ].join('\n')
+      : '',
     '',
     '## 只读盘面',
     chartSection,
