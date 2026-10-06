@@ -57,8 +57,10 @@ export function MessageEvidence({
       ) : null}
 
       {list.length > 0 ? (
-        <section className="evidence-sources">
-          <div className="evidence-title">依据（仅服务端选中的本地资料）</div>
+        <details className="evidence-sources">
+          <summary className="evidence-title">
+            展开依据（{list.length} 条来源；仅服务端选中的本地资料）
+          </summary>
           <ul className="evidence-list">
             {list.map((source) => (
               <li key={`${source.sid}-${source.sourceId}-${source.locatorValue ?? ''}`}>
@@ -78,7 +80,10 @@ export function MessageEvidence({
               </li>
             ))}
           </ul>
-        </section>
+          <div className="conversation-meta">
+            引用只来自服务端选中的编号；模型正文里的编号、路径或链接不会被渲染为出处。
+          </div>
+        </details>
       ) : null}
     </div>
   );
