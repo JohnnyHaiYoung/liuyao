@@ -196,6 +196,10 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
     '请起一卦，顺便介绍六爻起卦的方法',
     '我想了解起卦方法，然后请起一卦',
     '请介绍六爻起卦的方法，再起一卦看看工作',
+    // 复验报告 5f1d2f1 P1：无标点并列（并/且）时仍须本地缺项追问
+    '请起一卦并解释起卦方法',
+    '请起一卦且说明起卦步骤',
+    '请起一卦并介绍六爻起卦的方法',
   ]) {
     const { events, names } = await send(pure);
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');

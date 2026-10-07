@@ -94,9 +94,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 13 条含混合句、知识问法反例 4 条、方法问法对照 3 条）、引用校验、上下文装配、注入边界 | **56/56** |
+| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 17 条含混合句与无标点并列、知识问法反例 4 条、方法问法对照 3 条）、引用校验、上下文装配、注入边界 | **60/60** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 11 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **51/51** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 14 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **54/54** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
@@ -183,6 +183,22 @@
 
 **实测**：`check:orchestration` **56/56**、`check:e2e` **51/51**、浏览器级 **2/2**；一键入口 `check:all --with-http --with-ui` 退出码 0、**11/11**。
 
+## 9.9 针对复验（`5f1d2f1`）P1 的修复（2026-10-07）
+
+**问题**：无标点并列的连接词（并/且）未被切句，`isCastRequestClause()` 又在检查"句首明确命令"之前因句中出现知识动词直接返回 false，于是「请起一卦并解释起卦方法」被整句判为 `source_comparison`、`missingInputs=[]`、本地回复 `null`。
+
+**修复**：按复验报告建议，改从**动作短语边界与子句关系**入手，不再依赖穷举整句样例：① 切句补充 `并/且/以及`；② `isCastRequestClause()` 改为位置判定——取子句中**最早**的起卦动作词，知识动词在其**之前**则不算请求（"解释六爻起卦的步骤"），动作词之后紧跟比较/定义词则算术语比较（"算一卦和排一卦有什么区别"），其余再看明确祈使／句首即动作／强动作词。因此"并/且/后"等无标点连接词**无需穷举**：动作在前即成立。
+
+| 输入 | 修复后 |
+| --- | --- |
+| 请起一卦并解释起卦方法 / 请起一卦且说明起卦步骤 / 请起一卦并介绍六爻起卦的方法 | **chart** + lineValues,castTime,timezone + 缺项追问 |
+| 帮我起一卦并说明用神怎么看 / 请起一卦并说明卦理 | 同上 |
+| （反例）我想了解六爻起卦的方法 / 请介绍一下如何用六爻起卦 / 帮我解释六爻起卦的步骤 | source_comparison，无排盘索取 |
+| （反例）算一卦和排一卦有什么区别？ | general，无排盘索取 |
+| （反例）梅花起卦与六爻断卦怎么比较？ / 起卦和断卦的区别是什么？ | source_comparison |
+| （反例）请教我用六爻起卦 | 一句歧义澄清 |
+
+**实测**：**先重建再验**（`npm run build` exit 0，`BUILD_ID` 晚于最新源码）→ `check:all --with-http --with-ui` 退出码 0、**11/11**；`check:orchestration` **60/60**、`check:e2e` **54/54**、浏览器级 **2/2**。
 ## 10. 真实上游联调记录（2026-10-07）
 
 环境：`app/.env.local` 配置 `DEEPSEEK_API_KEY`（DeepSeek 官方 `api.deepseek.com`）与 `QWEN_API_KEY`（阿里云百炼官方兼容模式 `dashscope.aliyuncs.com/compatible-mode/v1`）；所有联调**在正式库副本上**进行，正式 `storage/liuyao.db` 未被改动。

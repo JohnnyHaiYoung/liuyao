@@ -106,11 +106,12 @@ const AMBIGUOUS_TEACH_PATTERN = new RegExp(`(?:请教|教我|教教)[^。；！�
  * 后半句要求讲知识。上一版用"整句里有没有知识词"一刀切，导致起卦请求被知识词抹掉。
  * 现在先按标点与连接词切成子句，**任一子句明确要求起卦且缺输入**就必须保持 chart + 缺项。
  */
-const CLAUSE_SPLIT_PATTERN = /[，。；！？,;!?]+|然后|接着|顺便|同时|并且|再/;
+const CLAUSE_SPLIT_PATTERN = /[，。；！？,;!?]+|然后|接着|顺便|同时|并且|以及|并|且|再/;
 const CLAUSE_BARE_ACTION_PATTERN = new RegExp(
   `^(?:请|麻烦|劳驾|来|现在|马上|立刻|帮我|给我|替我|另|重新)?\\s*(?:${CAST_ACTION_WORDS})`,
 );
 const CLAUSE_HAS_KNOWLEDGE_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})`);
+const CLAUSE_FIRST_ACTION_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})`);
 
 export function splitClauses(question: string): string[] {
   return question
@@ -119,13 +120,29 @@ export function splitClauses(question: string): string[] {
     .filter((item) => item !== '');
 }
 
-/** 该子句是否在要求"现在就起一卦"。知识动词所在的子句只算讲知识，不算请求。 */
+/**
+ * 该子句是否在要求"现在就起一卦"。
+ *
+ * 复验报告 5f1d2f1 P1：不能用"整句/整子句里有没有知识动词"一刀切——「请起一卦并解释起卦方法」
+ * 的起卦命令在**前**、讲解要求在**后**，不能让后者否决前者。这里改为**动作短语边界**判定：
+ *   1) 找到子句里**最早**的起卦动作词；
+ *   2) 知识动词出现在它**之前** → 这个动作是被"讲知识"管着的（"解释六爻起卦的步骤"），不算请求；
+ *   3) 动作词之后紧跟比较/定义词 → 术语比较（"算一卦和排一卦有什么区别"），不算请求；
+ *   4) 其余情况再看是否有明确祈使、句首即动作、或强动作词。
+ * 这样"并/且/后"等无标点连接词无需穷举：动作在前即可成立。
+ */
 export function isCastRequestClause(clause: string): boolean {
-  if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(clause)) return false;
+  const trimmed = clause.trim();
+  if (trimmed === '') return false;
+  const action = CLAUSE_FIRST_ACTION_PATTERN.exec(trimmed);
+  if (!action) return false;
+  const beforeAction = trimmed.slice(0, action.index);
+  if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(beforeAction)) return false;
+  if (CAST_THEN_KNOWLEDGE_PATTERN.test(trimmed.slice(action.index))) return false;
   return (
-    CLAUSE_BARE_ACTION_PATTERN.test(clause) ||
-    REQUEST_IMPERATIVE_PATTERN.test(clause) ||
-    CAST_STRONG_ACTIONS.some((marker) => clause.includes(marker))
+    REQUEST_IMPERATIVE_PATTERN.test(trimmed) ||
+    CLAUSE_BARE_ACTION_PATTERN.test(trimmed) ||
+    CAST_STRONG_ACTIONS.some((marker) => trimmed.includes(marker))
   );
 }
 
