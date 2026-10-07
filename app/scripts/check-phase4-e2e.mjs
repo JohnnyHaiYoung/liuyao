@@ -192,6 +192,10 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
     '请用六爻帮我起卦，比较两份工作机会',
     '帮我用六爻起卦，比较两个方案',
     '请帮我用六爻起卦',
+    // 复验报告 2250d0d P1：混合句里的起卦请求必须仍然产生本地缺项追问
+    '请起一卦，顺便介绍六爻起卦的方法',
+    '我想了解起卦方法，然后请起一卦',
+    '请介绍六爻起卦的方法，再起一卦看看工作',
   ]) {
     const { events, names } = await send(pure);
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');

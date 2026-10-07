@@ -94,9 +94,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（起卦**动作**矩阵 8 条、方法问法对照 3 条、混合理由）、引用校验、上下文装配、注入边界 | **47/47** |
+| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 13 条含混合句、知识问法反例 4 条、方法问法对照 3 条）、引用校验、上下文装配、注入边界 | **56/56** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 8 条起卦/混合问法澄清（无盘、无候选、无上游）+ 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **44/44** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 11 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **51/51** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
@@ -163,6 +163,25 @@
 | 什么是用神？ | concept | — | 无 |
 
 **回归与复核（本轮实测）**：`check:orchestration` **47/47**、`check:e2e` **44/44**（上述 8 条均断言无盘、无候选事件、`model=local-clarification`、无上游调用）、`npm run build` exit 0、`typecheck` exit 0、`check:wiki` 17/17+28/28、`check:chart` 32/32、`check:migration-phase4` 30/30、`check:qwen` 22/22、`check:vendor` 11/11、`check:phase1-regression` 8/8（内含阶段 1 **37/37**）、阶段 2 资料 108 项通过。
+
+## 9.8 针对复验（`2250d0d`）P1/P2 的修复（2026-10-07）
+
+**P1 · 混合句中明确起卦请求被知识词抹掉**：判定改为**子句级**。先按标点与连接词（`，。；！？` 与 `然后/接着/顺便/同时/并且/再`）切分子句，逐句判断"是否在要求现在就起卦"（知识动词所在子句只算讲知识）；**任一子句明确要求起卦且缺输入**，整轮即保持 `chart` + 缺项追问，不再因另一子句问知识而降级为资料比较。
+
+| 输入 | 修复后 |
+| --- | --- |
+| 请起一卦，顺便介绍六爻起卦的方法 | **chart** + lineValues,castTime,timezone + 缺项追问 |
+| 我想了解起卦方法，然后请起一卦 | **chart** + 缺项追问 |
+| 请介绍六爻起卦的方法，再起一卦看看工作 | **chart** + 缺项追问 |
+| 请起一卦并说明卦理 / 请解释如何起卦，然后请帮我起一卦 | **chart** + 缺项追问 |
+| 我想了解六爻起卦的方法 / 请介绍一下如何用六爻起卦 / 帮我解释六爻起卦的步骤 | source_comparison，无排盘索取（反例仍成立） |
+| 请教我用六爻起卦 | 一句歧义澄清（不索取排盘输入） |
+
+**P2 · 浏览器验收服务的暴露范围**：`e2e/global-setup.ts` 改为 `next start -H 127.0.0.1`（显式只绑回环），测试口令**每次运行随机生成**（`crypto.randomBytes`），不再写死。实证：`TCP 127.0.0.1:3099 … LISTENING`，从 LAN 地址（172.27.192.1）访问被拒。
+
+**另外按报告"测试边界"补强浏览器用例**：原来只测"有内容会话 → 空白会话 → 返回"；现在增加**两个都有内容的会话互切**，断言各自只显示自己的消息与依据、且不出现对方的问题文本。
+
+**实测**：`check:orchestration` **56/56**、`check:e2e` **51/51**、浏览器级 **2/2**；一键入口 `check:all --with-http --with-ui` 退出码 0、**11/11**。
 
 ## 10. 真实上游联调记录（2026-10-07）
 

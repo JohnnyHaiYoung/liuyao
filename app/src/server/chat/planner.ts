@@ -99,6 +99,36 @@ const CAST_THEN_KNOWLEDGE_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})[^。；
 /** "请教/教我"这类学法问法：既可理解为学习方法，也可理解为现在起卦 → 只问一句澄清。 */
 const AMBIGUOUS_TEACH_PATTERN = new RegExp(`(?:请教|教我|教教)[^。；！？]{0,8}(?:${CAST_ACTION_WORDS})`);
 
+/**
+ * 子句级识别（复验报告 2250d0d P1）。
+ *
+ * 一句话里可以同时含两个请求：「请起一卦，顺便介绍六爻起卦的方法」——前半句要求**实际起卦**，
+ * 后半句要求讲知识。上一版用"整句里有没有知识词"一刀切，导致起卦请求被知识词抹掉。
+ * 现在先按标点与连接词切成子句，**任一子句明确要求起卦且缺输入**就必须保持 chart + 缺项。
+ */
+const CLAUSE_SPLIT_PATTERN = /[，。；！？,;!?]+|然后|接着|顺便|同时|并且|再/;
+const CLAUSE_BARE_ACTION_PATTERN = new RegExp(
+  `^(?:请|麻烦|劳驾|来|现在|马上|立刻|帮我|给我|替我|另|重新)?\\s*(?:${CAST_ACTION_WORDS})`,
+);
+const CLAUSE_HAS_KNOWLEDGE_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})`);
+
+export function splitClauses(question: string): string[] {
+  return question
+    .split(CLAUSE_SPLIT_PATTERN)
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
+/** 该子句是否在要求"现在就起一卦"。知识动词所在的子句只算讲知识，不算请求。 */
+export function isCastRequestClause(clause: string): boolean {
+  if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(clause)) return false;
+  return (
+    CLAUSE_BARE_ACTION_PATTERN.test(clause) ||
+    REQUEST_IMPERATIVE_PATTERN.test(clause) ||
+    CAST_STRONG_ACTIONS.some((marker) => clause.includes(marker))
+  );
+}
+
 export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const question = String(params.question ?? '');
   const reasons: string[] = [];
@@ -157,18 +187,20 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 3.5) 起卦/新卦请求但**完全没有输入**：只澄清，不调用模型（任务书第 2 节）。
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
-  // 先识别"用户当前要执行的动作"：是"现在替我起卦"，还是在问"怎样起卦"（复验报告 8dd1c09 P1）
-  const hasCastAction = CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
-  const hasRequestImperative = REQUEST_IMPERATIVE_PATTERN.test(question);
+  // 先识别"用户当前要执行的动作"：按**子句**分别判断"现在起卦"与"讲知识"（复验报告 2250d0d P1）
+  const clauseList = splitClauses(question);
+  const hasCastRequest = clauseList.some((clause) => isCastRequestClause(clause));
+  const hasCastAction = hasCastRequest || CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
+  const hasRequestImperative = hasCastRequest || REQUEST_IMPERATIVE_PATTERN.test(question);
   const knowledgeAboutCast = KNOWLEDGE_ABOUT_CAST_PATTERN.test(question);
   const castThenKnowledge = CAST_THEN_KNOWLEDGE_PATTERN.test(question);
   const asksToBeTaught = AMBIGUOUS_TEACH_PATTERN.test(question);
   const looksLikeMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
-  // 知识问答：在谈论起卦这件事（学习方法/步骤/术语差别），且没有"现在替我起卦"的祈使
+  // 任一子句明确要求起卦 → 整轮按起卦处理（讲知识的部分可等输入后回答），不得降级为资料比较
   const isKnowledgeQuestion =
-    !hasRequestImperative && (knowledgeAboutCast || castThenKnowledge || looksLikeMethodQuestion);
+    !hasCastRequest && !hasRequestImperative && (knowledgeAboutCast || castThenKnowledge || looksLikeMethodQuestion);
   // 歧义："请教我用六爻起卦" —— 只问一句"学习方法还是现在起卦"，不索取排盘输入
-  const isAmbiguousLearnOrCast = asksToBeTaught && !hasRequestImperative;
+  const isAmbiguousLearnOrCast = asksToBeTaught && !hasCastRequest && !hasRequestImperative;
   const wantsCast = hasCastAction && !isKnowledgeQuestion && !isAmbiguousLearnOrCast;
 
   if (isAmbiguousLearnOrCast && !hasAnyChartInput && !wantsNewChart) {

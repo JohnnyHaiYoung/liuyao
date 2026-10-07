@@ -14,6 +14,7 @@
  * 前置：需要先 `npm run build`（这里跑 `next start`）。
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -22,7 +23,9 @@ import path from 'node:path';
 const appDir = path.resolve(__dirname, '..');
 const projectRoot = path.resolve(appDir, '..');
 const runtimeFile = path.join(appDir, 'e2e', '.runtime.json');
-const TEST_PASSWORD = 'ui-e2e-password';
+// 每次运行随机生成测试口令（复验报告 2250d0d P2：不把固定口令写进代码，
+// 且只在隔离库内有效；正式环境用 app/.env.local 的 scrypt 哈希）
+const TEST_PASSWORD = `ui-e2e-${crypto.randomBytes(12).toString('hex')}`;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -130,7 +133,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     delete env.LIUYAO_OWNER_PASSWORD;
 
     const appLog = path.join(storeDir, 'app.log');
-    app = spawn(process.execPath, [path.join(appDir, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start', '-p', String(appPort)], {
+    app = spawn(process.execPath, [path.join(appDir, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start', '-H', '127.0.0.1', '-p', String(appPort)], {
       cwd: appDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],

@@ -72,10 +72,19 @@ test('依据跟随各自消息，切换/新建会话不残留、回看仍在', a
   await expect(page.locator('article.message.assistant')).toHaveCount(0);
   await expect(page.locator('.message-evidence')).toHaveCount(0);
 
-  // 回到旧会话：历史快照仍应显示自己的依据
+  // 在第二个会话里也发一条（复验报告 2250d0d「测试边界」）：两个**都有内容**的会话互切不得串话
+  await sendMessage(page, '什么是六爻？');
+  await expect(page.locator('article.message.assistant')).toHaveCount(1);
+  await expect(page.locator('.message-evidence')).toHaveCount(1);
+  await expect(page.locator('.messages')).toContainText('什么是六爻？');
+  await expect(page.locator('.messages')).not.toContainText('什么是用神？');
+
+  // 回到旧会话：历史快照仍应显示自己的依据，且只有自己那一条消息
   await page.locator('.conversation-item', { hasText: titleText }).first().click();
   await expect(page.locator('article.message.assistant')).toHaveCount(1);
   await expect(page.locator('article.message.assistant .message-evidence').first()).toBeVisible();
+  await expect(page.locator('.messages')).toContainText('什么是用神？');
+  await expect(page.locator('.messages')).not.toContainText('什么是六爻？');
 });
 
 test('输入后切换模型立刻发送：请求体与上游调用都用新模型', async ({ page }) => {
