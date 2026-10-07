@@ -75,7 +75,7 @@ const CAST_MODIFIERS = '请|麻烦|帮我|帮|替我|给我|我要|我想|我求
  * 刻意不含"断"：断卦属解读，不是起卦动作。
  */
 const CAST_ACTION_VERBS = '起|摇|占|卜|看|排|算|求|问|掷';
-const CAST_ACTION_WORDS = `${CAST_ACTION_VERBS}(?:个|一|1)?卦|来(?:个|一|1)卦|打(?:个|一|1)?卦|看这卦|看下卦|断一卦|占卜|问卦|求卦`;
+const CAST_ACTION_WORDS = `(?:${CAST_ACTION_VERBS})(?:个|一|1)?卦|来(?:个|一|1)卦|打(?:个|一|1)?卦|看这卦|看下卦|断一卦|占卜|问卦|求卦`;
 const CAST_ACTION_PATTERN = new RegExp(`(?:${CAST_MODIFIERS})[^，。；！？]{0,6}(?:${CAST_ACTION_WORDS})`);
 /** 强动作（出现即偏"请求"）：形态规则本身 + 若干固定说法。裸"起卦"是否算请求由位置规则决定。 */
 const CAST_STRONG_PATTERN = new RegExp(
@@ -122,12 +122,16 @@ const AMBIGUOUS_TEACH_PATTERN = new RegExp(`(?:请教|教我|教教)[^。；！�
  * 后半句要求讲知识。上一版用"整句里有没有知识词"一刀切，导致起卦请求被知识词抹掉。
  * 现在先按标点与连接词切成子句，**任一子句明确要求起卦且缺输入**就必须保持 chart + 缺项。
  */
-const CLAUSE_SPLIT_PATTERN = /[，。；！？,;!?]+|然后|接着|顺便|同时|并且|以及|并|且|再/;
+const CLAUSE_SPLIT_PATTERN = /[，。；！？,;!?]+|之后|然后|接着|顺便|同时|并且|以及|并|且|再|后/;
 const CLAUSE_BARE_ACTION_PATTERN = new RegExp(
   `^(?:请|麻烦|劳驾|来|现在|马上|立刻|帮我|给我|替我|另|重新)?\\s*(?:${CAST_ACTION_WORDS})`,
 );
 const CLAUSE_HAS_KNOWLEDGE_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})`);
 const CLAUSE_FIRST_ACTION_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})`);
+/** 方法/操作问法（"怎么弄/如何做/怎么操作"）——问的是**怎么做**，不是"现在替我起卦"。 */
+const HOW_TO_PATTERN = new RegExp(`(?:怎么|如何|怎样|咋样)[^。；！？]{0,4}(?:弄|做|操作|起|算|排|占|卜|搞|玩|进行)`);
+/** 句首祈使 + 起卦动作（请/来/现在…起一卦）：明确的"现在起卦"，不被后置知识词否决（复验 c1b000a P1-1）。 */
+const LEADING_IMPERATIVE_PATTERN = new RegExp(`^(?:请|麻烦|劳驾|来|现在|马上|立刻)\\s*(?:${CAST_ACTION_WORDS})`);
 
 export function splitClauses(question: string): string[] {
   return question
@@ -150,14 +154,18 @@ export function splitClauses(question: string): string[] {
 export function isCastRequestClause(clause: string): boolean {
   const trimmed = clause.trim();
   if (trimmed === '') return false;
+  // 方法/操作问法优先："六爻起卦怎么弄""占卜怎么弄""起个卦怎么操作"都是问怎么做，不是起卦
+  if (HOW_TO_PATTERN.test(trimmed)) return false;
+  // 句首祈使（请/来/现在…起一卦）或"帮我/请帮…起卦"：明确"现在起卦"，不被后置知识词否决
+  if (REQUEST_IMPERATIVE_PATTERN.test(trimmed) || LEADING_IMPERATIVE_PATTERN.test(trimmed)) return true;
   const action = CLAUSE_FIRST_ACTION_PATTERN.exec(trimmed);
   if (!action) return false;
   const beforeAction = trimmed.slice(0, action.index);
+  // 知识动词在动作之前 → 该动作被"讲知识"管着（"解释六爻起卦的步骤"）
   if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(beforeAction)) return false;
+  // 动作之后紧跟比较/知识名词 → 术语比较或方法问法（"算一卦和排一卦有什么区别""起卦的方法"）
   if (CAST_THEN_KNOWLEDGE_PATTERN.test(trimmed.slice(action.index))) return false;
   return (
-    REQUEST_IMPERATIVE_PATTERN.test(trimmed) ||
-    CLAUSE_BARE_ACTION_PATTERN.test(trimmed) ||
     CAST_STRONG_PATTERN.test(trimmed) ||
     CAST_STRONG_ACTIONS.some((marker) => trimmed.includes(marker))
   );
@@ -313,16 +321,9 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const commandLike =
     REQUEST_IMPERATIVE_PATTERN.test(question) ||
     clauseList.some((clause) => {
-      const action = CLAUSE_FIRST_ACTION_PATTERN.exec(clause);
-      if (!action) return false;
-      // 知识动词在动作之前（"解释六爻起卦的步骤"）或知识名词在动作之后（"起卦的方法"）→ 讲知识，不算命令式
-      if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(clause.slice(0, action.index))) return false;
-      if (CAST_THEN_KNOWLEDGE_PATTERN.test(clause.slice(action.index))) return false;
-      return (
-        REQUEST_IMPERATIVE_PATTERN.test(clause) ||
-        CAST_STRONG_PATTERN.test(clause) ||
-        CLAUSE_BARE_ACTION_PATTERN.test(clause)
-      );
+      const trimmed = clause.trim();
+      if (trimmed === '' || HOW_TO_PATTERN.test(trimmed)) return false;
+      return LEADING_IMPERATIVE_PATTERN.test(trimmed) || isCastRequestClause(trimmed);
     });
   const appendedClarification =
     commandLike && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0 ? 'missing_inputs' : null;

@@ -200,6 +200,7 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
     '请起一卦并解释起卦方法',
     '请起一卦且说明起卦步骤',
     '请起一卦并介绍六爻起卦的方法',
+    '请起一卦后解释起卦方法',
   ]) {
     const { events, names } = await send(pure);
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
@@ -213,7 +214,7 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
   }
 
   // 复验报告（8dd1c09）P1：知识问法必须走模型（可答知识），不得变成排盘缺项追问
-  for (const knowledge of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤']) {
+  for (const knowledge of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作']) {
     const { events, names } = await send(knowledge);
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
     const page = listMessages(db, conversationId, { limit: 50 });
