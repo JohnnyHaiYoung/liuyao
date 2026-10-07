@@ -49,19 +49,24 @@ export interface PlanTurnResult {
 
 const FOLLOW_UP_MARKERS = ['这卦', '这个卦', '此卦', '该卦', '刚才那卦', '刚起的卦', '上面那卦', '这盘', '这个盘', '沿用', '还是这卦'];
 const NEW_CHART_MARKERS = ['新卦', '另起', '重新起卦', '再起一卦', '另问一事', '另外一卦'];
-/** 明确的起卦请求用词（不含"起卦"这类可能出现在概念/比较问题里的词，后者由 CONCEPT_GUARD 排除）。 */
-const CAST_REQUEST_MARKERS = [
-  '帮我起卦', '帮我起一卦', '帮起一卦', '起一卦', '摇一卦', '占一卦', '卜一卦',
-  '看一卦', '帮我看卦', '帮我看看卦', '请帮我看卦', '看个卦', '看下卦', '看一下卦',
-  '起卦看看', '给我起卦', '换个卦',
-];
 /**
- * 方法/知识类问法：只有在"比较/定义"词与**方法或知识术语**相邻时才算元问题。
+ * 第一层：**起卦动作识别**（先判断用户是不是在要求执行起卦/看具体卦）。
  *
- * 复验报告（bbb54b5）P1：先前用 ['比较','来源',…] 做整体排除，导致
- * 「帮我起卦，比较两份工作机会」「请帮我起卦，看看收入来源如何」——那里的"比较/来源"是**起卦的对象或目的**，
- * 不是在被比较的六爻方法本身——被误判为 source_comparison，绕过缺项追问。
- * 现在只有"梅花/六爻/断卦/…"这类术语与"比较/区别/是什么"邻近时才判为元问题。
+ * 复验报告（3544422）P1 指出：不能再用"整句里方法词与比较词的距离"去否决明确的起卦动作，
+ * 否则「请用六爻帮我起卦，比较两份工作机会」会因句中出现"六爻…比较"而被判成资料比较。
+ * 因此这里用**动作结构**判定：允许"请/麻烦/帮我/替我/给我/我要/我想/求/另/再/重新/用X/以X"
+ * 等修饰出现在动作词之前（最多 3 段、每段不超过 6 字），动作词包括"起卦/起一卦/摇卦/看一卦…"。
+ * 与此同时保留若干**本身就是请求**的强动作词（不含裸"起卦"，避免"起卦和断卦的区别"被误判）。
+ */
+const CAST_MODIFIERS = '请|麻烦|帮我|帮|替我|给我|我要|我想|我求|求|另|再|重新|用[^，。；！？]{0,4}|以[^，。；！？]{0,4}|通过[^，。；！？]{0,4}';
+const CAST_ACTION_WORDS = '起卦|起一卦|摇卦|摇一卦|占一卦|卜一卦|看一卦|看卦|看这卦|看下卦|断一卦|排一卦|算一卦|求一卦';
+const CAST_ACTION_PATTERN = new RegExp(`(?:${CAST_MODIFIERS})[^，。；！？]{0,6}(?:${CAST_ACTION_WORDS})`);
+/** 不含裸「起卦」的强动作词：出现即视为请求。 */
+const CAST_STRONG_ACTIONS = ['起一卦', '摇一卦', '占一卦', '卜一卦', '看一卦', '摇卦', '排一卦', '算一卦', '求一卦', '看这卦'];
+
+/**
+ * 第二层：**方法/知识类问法**（只有在没有起卦动作时才用于分类）。
+ * 依旧要求"比较/区别/是什么…"与方法术语邻近，避免把现实对象当成知识体系比较。
  */
 const METHOD_TERMS = '梅花|六爻|断卦|起卦法|起卦方式|易数|纳甲|用神|流派|断法|卦理|体系|方法|资料|Wiki';
 const METHOD_COMPARISON_PATTERN = new RegExp(
@@ -127,8 +132,13 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 3.5) 起卦/新卦请求但**完全没有输入**：只澄清，不调用模型（任务书第 2 节）。
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
-  const isMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
-  const wantsCast = !isMethodQuestion && CAST_REQUEST_MARKERS.some((marker) => question.includes(marker));
+  // 先识别"是否在请求执行起卦/看具体卦"，再看它在比较现实对象还是知识体系（复验报告 3544422 P1）
+  const hasCastAction = CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
+  const looksLikeMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
+  const wantsCast = hasCastAction;
+  if (hasCastAction && looksLikeMethodQuestion) {
+    reasons.push('句中同时出现起卦动作与方法词：按"先追问缺项"处理（若你想问的是方法差别，请直接说明"区别/比较方法"）');
+  }
   if ((wantsCast || wantsNewChart) && !hasAnyChartInput) {
     reasons.push(
       wantsNewChart

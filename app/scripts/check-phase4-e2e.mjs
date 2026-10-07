@@ -183,7 +183,16 @@ console.log('\n=== 4) 旧卦追问（沿用快照，不重算） ===');
 console.log('\n=== 5) 缺项只追问（不调用模型） ===');
 {
   // 复验报告 P1-1：单纯请求起卦（没有爻值/时间）也必须只澄清，不进入模型
-  for (const pure of ['帮我起卦', '另起一卦', '请帮我看卦', '帮我起卦，比较两份工作机会', '请帮我起卦，看看收入来源如何']) {
+  for (const pure of [
+    '帮我起卦',
+    '另起一卦',
+    '请帮我看卦',
+    '帮我起卦，比较两份工作机会',
+    '请帮我起卦，看看收入来源如何',
+    '请用六爻帮我起卦，比较两份工作机会',
+    '帮我用六爻起卦，比较两个方案',
+    '请帮我用六爻起卦',
+  ]) {
     const { events, names } = await send(pure);
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
     const page = listMessages(db, conversationId, { limit: 50 });

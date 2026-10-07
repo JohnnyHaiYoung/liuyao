@@ -62,25 +62,18 @@ console.log('=== 1) 意图判定与计划对象 ===');
   const vague = plan('用 878887 起一卦');
   check('含糊爻值 → 进 ambiguities 且不排盘', vague.plan.ambiguities.length > 0 && vague.plan.chartAction !== 'new', vague.plan.ambiguities[0] ?? '');
 
-  // 复验报告 P1-1：单纯请求起卦（完全没有输入）必须只澄清
-  for (const pure of ['帮我起卦', '另起一卦', '请帮我看卦']) {
-    const casting = plan(pure);
-    const reply = buildMissingInputReply(casting.plan);
-    check(
-      `「${pure}」→ intent=chart 且缺项为 lineValues/castTime/timezone`,
-      casting.plan.intent === 'chart' &&
-        casting.plan.chartAction === 'none' &&
-        ['lineValues', 'castTime', 'timezone'].every((item) => casting.plan.missingInputs.includes(item)) &&
-        typeof reply === 'string' &&
-        reply.includes('最终结果：'),
-      `${casting.plan.intent}/${casting.plan.chartAction} missing=${casting.plan.missingInputs.join(',')}`,
-    );
-  }
-  const metaComparison = plan('梅花起卦与六爻断卦怎么比较？');
-  check('比较类问法不被误判为起卦请求', metaComparison.plan.intent === 'source_comparison' && metaComparison.plan.missingInputs.length === 0, `${metaComparison.plan.intent}/${metaComparison.plan.missingInputs.join(',')}`);
-
-  // 复验报告（bbb54b5）P1：起卦动作优先于"作为对象/目的出现的比较、来源等词"
-  for (const mixed of ['帮我起卦，比较两份工作机会', '请帮我起卦，看看收入来源如何']) {
+  // 复验报告（bbb54b5 / 3544422）P1：起卦**动作**优先于句中出现的"比较/来源/方法词"
+  const castSamples = [
+    '帮我起卦',
+    '另起一卦',
+    '请帮我看卦',
+    '帮我起卦，比较两份工作机会',
+    '请帮我起卦，看看收入来源如何',
+    '请用六爻帮我起卦，比较两份工作机会',
+    '帮我用六爻起卦，比较两个方案',
+    '请帮我用六爻起卦',
+  ];
+  for (const mixed of castSamples) {
     const casting = plan(mixed);
     const reply = buildMissingInputReply(casting.plan);
     check(
@@ -93,8 +86,16 @@ console.log('=== 1) 意图判定与计划对象 ===');
       `${casting.plan.intent}/${casting.plan.chartAction} missing=${casting.plan.missingInputs.join(',')}`,
     );
   }
-  const meta2 = plan('起卦和断卦的区别是什么？');
-  check('真正的方法差别问法仍走资料/概念，不误判为起卦', meta2.plan.intent !== 'chart' && meta2.plan.missingInputs.length === 0, `${meta2.plan.intent}/${meta2.plan.missingInputs.join(',')}`);
+  const ambiguous = plan('请用六爻帮我起卦，比较两份工作机会');
+  check(
+    '起卦动作与方法词同时出现时说明"先追问"的理由',
+    ambiguous.plan.reasons.some((item) => item.includes('同时出现起卦动作与方法词')),
+    ambiguous.plan.reasons.find((item) => item.includes('同时出现起卦动作与方法词')) ?? '(无)',
+  );
+  for (const meta of ['梅花起卦与六爻断卦怎么比较？', '起卦和断卦的区别是什么？', '六爻和梅花易数的区别']) {
+    const method = plan(meta);
+    check(`方法差别问法「${meta}」仍走资料比较，不误判为起卦`, method.plan.intent !== 'chart' && method.plan.missingInputs.length === 0, `${method.plan.intent}/${method.plan.missingInputs.join(',')}`);
+  }
 }
 
 console.log('\n=== 2) 引用校验（只认本次选中的编号） ===');

@@ -94,9 +94,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（纯起卦、**混合问法**、方法类比较的区分）、引用校验、上下文装配、注入边界 | **42/42** |
+| `npm --prefix app run check:orchestration` | 意图判定（起卦**动作**矩阵 8 条、方法问法对照 3 条、混合理由）、引用校验、上下文装配、注入边界 | **47/47** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 纯/混合起卦澄清（无盘、无候选、无上游）+ 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **41/41** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 8 条起卦/混合问法澄清（无盘、无候选、无上游）+ 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **44/44** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
@@ -135,6 +135,33 @@
 | 附带修正：本地澄清仍发候选资料事件 | 候选 `sources` 事件在本地澄清分支之前发出 | 把候选/盘面事件移到**真正调用模型**的分支；澄清路径事件序列为 `start → delta → done`，不出现 `sources`/`chart`，避免"没调用模型却有依据"的误导 |
 
 **本次实测**：`check:orchestration` **42/42**、`check:e2e` **41/41**（含两条混合问法断言"无盘、无候选、无上游调用"）、其余套件不变（wiki 17/17+28/28、chart 32/32、migration 30/30、qwen 21/21、vendor 11/11）、`check:phase1-regression` **8/8**（内含阶段 1 **37/37**）、`typecheck` 与 `next build` exit 0、阶段 2 资料 108 项通过。
+
+## 9.7 针对复验（`3544422`）P1 的结构性修正（2026-10-07）
+
+**问题**：判定顺序错了——先看"句中有没有方法词与方法比较词邻近"，再用它否决显式起卦动作，导致「请用六爻帮我起卦，比较两份工作机会」「帮我用六爻起卦，比较两个方案」「请帮我用六爻起卦」都被判成 `source_comparison`，绕过缺项追问。
+
+**结构性修正（不再依赖词表堆叠）**：判定改为**两层、动作优先**
+
+1. **第一层 · 起卦动作识别**：以**动作结构**判定，而非枚举具体句子。允许修饰语（`请/麻烦/帮我/替我/给我/我要/我想/求/另/再/重新/用X/以X/通过X`，最多 3 段、每段 ≤6 字）出现在动作词（`起卦/起一卦/摇卦/摇一卦/占一卦/卜一卦/看一卦/看卦/看这卦/看下卦/断一卦/排一卦/算一卦/求一卦`）之前；另有若干"本身就是请求"的强动作词（**不含裸「起卦」**，以免"起卦和断卦的区别"被误判）。
+2. **第二层 · 方法/知识类问法**：只有**没有起卦动作**时，才用"方法术语与比较/定义词邻近"把问题归入资料比较。
+3. **混合且不确定时优先澄清**：起卦动作与方法词同时出现时按"先追问缺项"处理，并在 `plan.reasons` 写明理由。
+
+**实测分类矩阵**（真实 `wiki/catalog.json`）：
+
+| 输入 | intent | missingInputs | 本地澄清 |
+| --- | --- | --- | --- |
+| 请用六爻帮我起卦，比较两份工作机会 | **chart** | lineValues, castTime, timezone | 有 |
+| 帮我用六爻起卦，比较两个方案 | **chart** | 同上 | 有 |
+| 请帮我用六爻起卦 | **chart** | 同上 | 有 |
+| 帮我起卦，比较两份工作机会 | **chart** | 同上 | 有 |
+| 请帮我起卦，看看收入来源如何 | **chart** | 同上 | 有 |
+| 帮我起卦 / 另起一卦 / 请帮我看卦 | **chart** | 同上 | 有 |
+| 梅花起卦与六爻断卦怎么比较？ | source_comparison | — | 无 |
+| 起卦和断卦的区别是什么？ | source_comparison | — | 无 |
+| 六爻和梅花易数的区别 | source_comparison | — | 无 |
+| 什么是用神？ | concept | — | 无 |
+
+**回归与复核（本轮实测）**：`check:orchestration` **47/47**、`check:e2e` **44/44**（上述 8 条均断言无盘、无候选事件、`model=local-clarification`、无上游调用）、`npm run build` exit 0、`typecheck` exit 0、`check:wiki` 17/17+28/28、`check:chart` 32/32、`check:migration-phase4` 30/30、`check:qwen` 22/22、`check:vendor` 11/11、`check:phase1-regression` 8/8（内含阶段 1 **37/37**）、阶段 2 资料 108 项通过。
 
 ## 10. 真实上游联调记录（2026-10-07）
 
