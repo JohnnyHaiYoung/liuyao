@@ -129,7 +129,7 @@ const CLAUSE_BARE_ACTION_PATTERN = new RegExp(
 const CLAUSE_HAS_KNOWLEDGE_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})`);
 const CLAUSE_FIRST_ACTION_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})`);
 /** 方法/操作问法（"怎么弄/如何做/怎么操作"）——问的是**怎么做**，不是"现在替我起卦"。 */
-const HOW_TO_PATTERN = new RegExp(`(?:怎么|如何|怎样|咋样)[^。；！？]{0,4}(?:弄|做|操作|起|算|排|占|卜|搞|玩|进行)`);
+const HOW_TO_PATTERN = new RegExp(`(?:怎么|如何|怎样|咋样)[^。；！？]{0,4}(?:弄|做|操作|起|算|排|占|卜|搞|玩|进行|断|解|分析|判断|看|读)`);
 /** 句首祈使 + 起卦动作（请/来/现在…起一卦）：明确的"现在起卦"，不被后置知识词否决（复验 c1b000a P1-1）。 */
 const LEADING_IMPERATIVE_PATTERN = new RegExp(`^(?:请|麻烦|劳驾|来|现在|马上|立刻)\\s*(?:${CAST_ACTION_WORDS})`);
 
@@ -195,11 +195,20 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const wantsFollowUp = FOLLOW_UP_MARKERS.some((marker) => question.includes(marker));
   const wantsNewChart = params.explicitNewChart === true || NEW_CHART_MARKERS.some((marker) => question.includes(marker));
 
+  // 子句与意图信号须在"旧盘追问"判定**之前**算出（复验 49c1292 P1-1：先起新卦、再看"这卦"不能先被旧盘截获）
+  const clauseList = splitClauses(question);
+  const hasCastRequest = clauseList.some((clause) => isCastRequestClause(clause));
+  const hasHowToQuestion = HOW_TO_PATTERN.test(question) || clauseList.some((clause) => HOW_TO_PATTERN.test(clause));
+  const hasExplicitCastRequest =
+    REQUEST_IMPERATIVE_PATTERN.test(question) || clauseList.some((clause) => LEADING_IMPERATIVE_PATTERN.test(clause));
+  // 方法/操作问法（怎么弄/如何断卦…）：纯学法 → 讲知识；但"帮我起卦，怎么排"这类有明确祈使的仍按请求
+  const isHowToQuestion = hasHowToQuestion && !hasExplicitCastRequest;
+
   if (extraction.ambiguities.length > 0) reasons.push(...extraction.ambiguities.map((item) => `提取含糊：${item}`));
 
-  // 3) 是否沿用旧盘：明确追问旧盘、且没有给出新的一组完整输入
+  // 3) 是否沿用旧盘：明确追问旧盘、没有新起卦请求、且没有给出新的一组完整输入
   const hasCompleteInput = Boolean(merged.lineValues) && Boolean(merged.mode === 'manual_calendar' ? merged.dayGanzhi && merged.monthBranch : merged.castAt && merged.timezone);
-  if (wantsFollowUp && !wantsNewChart && !hasCompleteInput) {
+  if (wantsFollowUp && !wantsNewChart && !hasCompleteInput && !hasCastRequest && !isHowToQuestion) {
     const followUpChartRunId = params.currentChartRunId ?? null;
     const missingInputs: string[] = followUpChartRunId ? [] : ['chart'];
     reasons.push(
@@ -230,19 +239,18 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
   // 先识别"用户当前要执行的动作"：按**子句**分别判断"现在起卦"与"讲知识"（复验报告 2250d0d P1）
-  const clauseList = splitClauses(question);
-  const hasCastRequest = clauseList.some((clause) => isCastRequestClause(clause));
   const hasCastAction = hasCastRequest || CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
   const hasRequestImperative = hasCastRequest || REQUEST_IMPERATIVE_PATTERN.test(question);
   const knowledgeAboutCast = KNOWLEDGE_ABOUT_CAST_PATTERN.test(question);
   const castThenKnowledge = CAST_THEN_KNOWLEDGE_PATTERN.test(question);
   const asksToBeTaught = AMBIGUOUS_TEACH_PATTERN.test(question);
   const looksLikeMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
-  // 任一子句明确要求起卦 → 整轮按起卦处理（讲知识的部分可等输入后回答），不得降级为资料比较
+  // 方法/操作问法优先算知识；任一子句明确要求起卦 → 整轮按起卦处理（讲知识的部分可等输入后回答）
   const isKnowledgeQuestion =
-    !hasCastRequest && !hasRequestImperative && (knowledgeAboutCast || castThenKnowledge || looksLikeMethodQuestion);
+    isHowToQuestion ||
+    (!hasCastRequest && !hasRequestImperative && (knowledgeAboutCast || castThenKnowledge || looksLikeMethodQuestion));
   // 歧义："请教我用六爻起卦" —— 只问一句"学习方法还是现在起卦"，不索取排盘输入
-  const isAmbiguousLearnOrCast = asksToBeTaught && !hasCastRequest && !hasRequestImperative;
+  const isAmbiguousLearnOrCast = asksToBeTaught && !hasCastRequest && !hasRequestImperative && !isHowToQuestion;
   const wantsCast = hasCastAction && !isKnowledgeQuestion && !isAmbiguousLearnOrCast;
 
   if (isAmbiguousLearnOrCast && !hasAnyChartInput && !wantsNewChart) {
@@ -326,7 +334,9 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
       return LEADING_IMPERATIVE_PATTERN.test(trimmed) || isCastRequestClause(trimmed);
     });
   const appendedClarification =
-    commandLike && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0 ? 'missing_inputs' : null;
+    commandLike && !hasHowToQuestion && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0
+      ? 'missing_inputs'
+      : null;
   if (appendedClarification !== null) {
     reasons.push('方案 A 保证追问：句中出现起卦动作而输入不全，已在回答开头附缺项澄清');
   }

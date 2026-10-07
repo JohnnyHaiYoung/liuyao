@@ -96,7 +96,22 @@ console.log('=== 1) 意图判定与计划对象 ===');
     '请起一卦后解释起卦方法',
     '请起一卦之后介绍起卦方法',
     '请起一卦，然后说明起卦步骤',
+    // 复验 49c1292 P1-1：先起新卦、再看"这卦/这盘"——新卦请求须先于旧盘追问
+    '请起一卦，告诉我这个卦的应期',
+    '帮我起卦之后分析这卦的工作机会',
+    '先为我起一卦，再解读这盘',
   ];
+  // 有旧盘时，"先起新卦、再看这卦"也不得沿用旧快照（复验 49c1292 P1-1）
+  for (const newThenThis of ['请起一卦，告诉我这个卦的应期', '帮我起卦之后分析这卦的工作机会', '先为我起一卦，再解读这盘']) {
+    const result = plan(newThenThis, { currentChartRunId: 'old-run-123' });
+    check(
+      `有旧盘时「${newThenThis}」仍先追新卦缺项、不沿用旧盘`,
+      result.plan.chartAction !== 'follow_up' &&
+        ['lineValues', 'castTime', 'timezone'].every((item) => result.plan.missingInputs.includes(item)) &&
+        buildMissingInputReply(result.plan) !== null,
+      `${result.plan.intent}/${result.plan.chartAction} missing=${result.plan.missingInputs.join(',')}`,
+    );
+  }
   for (const mixed of castSamples) {
     const casting = plan(mixed);
     const reply = buildMissingInputReply(casting.plan);
@@ -157,7 +172,7 @@ console.log('=== 1) 意图判定与计划对象 ===');
       `${result.plan.intent}`,
     );
   }
-  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作']) {
+  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作', '如果要算一卦该怎么操作', '起卦后该怎么断卦', '这卦怎么看']) {
     const result = plan(pure);
     check(
       `纯知识/无关问题「${pure}」不附缺项澄清（避免噪音）`,
