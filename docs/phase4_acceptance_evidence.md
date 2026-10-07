@@ -27,6 +27,7 @@ npm run check:all -- --with-http
 | 端到端（假模型，四条主流程） | 44/44 |
 | 千问适配器（本地模拟上游） | 22/22 |
 | 阶段 1 HTTP 运行态回归 | 8/8（内含阶段 1 既有验收 37/37） |
+| 浏览器级验收（Playwright + 本机 Chrome） | 2/2（依据随消息、切会话不残留、切换模型立刻发送） |
 
 补充：`npm run typecheck` 退出码 0；`npm run build` 退出码 0；`node tools/corpus-cli.ts verify` → 通过 108 项 / 警告 0 / 失败 0。
 
@@ -67,7 +68,7 @@ npm run check:all -- --with-http
 
 ## 3. 本次证据**未覆盖**的部分（如实列出）
 
-1. **浏览器级页面行为**：跨会话切换不残留证据、切换模型后立即发送的竞态——目前只由代码结构（切换即清理、`selectedModelRef`）+ 服务端断言间接保证，**本仓库无前端测试框架**，需人工或浏览器级复验。
+1. **浏览器级页面行为：已补齐（2026-10-07，提交 `d393b44`）**。`npm run check:ui`（Playwright + 复用本机 Chrome）在**隔离空库 + 模拟上游**上覆盖两条要求：①依据绑定各自消息、新建会话不残留、回旧会话从历史快照恢复；②输入问题后切换模型**立刻发送**时，请求体的 `model` 与新模型一致，且模拟上游确实收到该模型调用（反向证明未打真实 API）。实测 `2 passed`，并经一键入口 `check:all --with-http --with-ui` 复跑（11/11、退出码 0）。**边界**：它不覆盖真实 API 联调、视觉/样式与移动端布局——浏览器自动化是回归防线，不替代功能修复。
 2. **真实上游调用的验收方亲测**：验收方为控费未重发付费请求；研发记录见交付说明第 10 节。可用 `npm run check:all -- --with-live` 自行复跑（需 `app/.env.local` 配密钥）。
 3. **生产构建的 20 条动态文件追踪提示**：已配置 `outputFileTracingExcludes` 且产物内无隐私文件，但未声称告警消失；standalone 发布包留待阶段 5。
 4. **前端"非强制六爻值输入区"**：产品需求 §2 写"可附"、任务书 §2 写"可加"；服务端契约已具备（并经二次校验），页面暂无该控件（交付说明第 12 节第 9 项）。
@@ -78,8 +79,9 @@ npm run check:all -- --with-http
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao\app
-npm run check:all -- --with-http        # 全部离线证据（本次 10/10）
-npm run check:all                       # 同上但不含阶段 1 HTTP 回归
+npm run check:all -- --with-http        # 全部离线证据 + 阶段 1 HTTP 回归（本次 10/10）
+npm run check:all -- --with-http --with-ui   # 再加浏览器级验收（需先 npm run build；本次 11/11）
+npm run check:all                       # 不含阶段 1 HTTP 回归
 npm run check:all -- --with-live        # 附真实上游联调（需密钥、极小费用）
 ```
 
