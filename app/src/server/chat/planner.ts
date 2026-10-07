@@ -31,6 +31,11 @@ export interface PlanObject {
    * `learn_or_cast` = "请教我用六爻起卦"这类既可理解为学习方法、也可理解为现在起卦的歧义问法。
    */
   clarificationKind?: 'missing_inputs' | 'learn_or_cast';
+  /**
+   * 方案 A「保证追问」：判定没把这句话当成起卦、但句中确实像在要求起卦且输入不全时，
+   * 由服务端在模型回答**开头**附一句缺项澄清。这样任何措辞都无法"静默跳过追问"。
+   */
+  appendedClarification?: 'missing_inputs' | null;
 }
 
 export interface PlanTurnParams {
@@ -290,6 +295,19 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const isConcept = pageIds.some((id) => id.startsWith('concept:'));
   const intent: Intent = chart && chart.ok ? 'chart' : chartAction === 'new' || missingInputs.length > 0 ? 'chart' : isComparison ? 'source_comparison' : isConcept ? 'concept' : 'general';
 
+  // 方案 A「保证追问」：句中像在要求起卦（祈使+动作 / 强动作词 / 子句以动作开头），
+  // 但判定走了知识/概念路线且没有完整输入 → 交给服务端在回答开头附一句缺项澄清。
+  // 目的是让"漏判"的后果从"不追问"变成"多问一句"，不再能被新措辞绕过。
+  const commandLike =
+    REQUEST_IMPERATIVE_PATTERN.test(question) ||
+    CAST_STRONG_ACTIONS.some((marker) => question.includes(marker)) ||
+    clauseList.some((clause) => CLAUSE_BARE_ACTION_PATTERN.test(clause));
+  const appendedClarification =
+    commandLike && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0 ? 'missing_inputs' : null;
+  if (appendedClarification !== null) {
+    reasons.push('方案 A 保证追问：句中出现起卦动作而输入不全，已在回答开头附缺项澄清');
+  }
+
   return {
     plan: {
       intent,
@@ -303,10 +321,22 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
       promptVersion: params.promptVersion,
       followUpChartRunId: null,
       chartError: chart && !chart.ok ? { code: chart.errorCode, message: chart.message } : null,
+      appendedClarification,
     },
     wiki,
     chart,
   };
+}
+
+/**
+ * 方案 A 的附加澄清文本：附在模型回答**开头**，保证格式仍以回答的「最终结果：」收尾。
+ * 与 buildMissingInputReply 的区别：这条**不替代**回答，只保证"必定问一句"。
+ */
+export function buildAppendedClarification(plan: PlanObject): string | null {
+  if (plan.appendedClarification !== 'missing_inputs') return null;
+  return [
+    '（服务端提示）你这句里也提到起卦；若要我现在为你排一卦，请补充：六次爻值（自下而上、初爻在前）、起卦的当地民用时间与具体钟点、以及时区（本版支持 Asia/Shanghai / 北京时间）。',
+  ].join('\n');
 }
 
 /** 缺项追问文本由本地逻辑生成（不经模型），保证措辞不会被上游改写。 */

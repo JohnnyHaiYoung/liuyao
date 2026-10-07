@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadCatalog, resolveProjectRoot } from '../src/server/wiki/catalog.ts';
 import { selectWikiEvidence } from '../src/server/wiki/select.ts';
-import { buildMissingInputReply, planTurn } from '../src/server/chat/planner.ts';
+import { buildAppendedClarification, buildMissingInputReply, planTurn } from '../src/server/chat/planner.ts';
 import { annotateUnmappedSids, buildSourceHref, validateCitations } from '../src/server/chat/citations.ts';
 import { MAX_EVIDENCE_CHARS, buildTurnContext } from '../src/server/chat/context.ts';
 import { PHASE4_PROMPT_VERSION, PHASE4_SYSTEM_PROMPT } from '../src/server/prompt.ts';
@@ -127,6 +127,25 @@ console.log('=== 1) 意图判定与计划对象 ===');
       !taughtReply.includes('需要补充以下信息'),
     `${taught.plan.intent}/${taught.plan.clarificationKind}`,
   );
+  // 方案 A「保证追问」：命令式措辞即使被判为知识/概念，也必须附一句缺项澄清（不会静默跳过）
+  for (const guaranteed of ['请问起一卦的步骤是什么', '算一卦和排一卦有什么区别？']) {
+    const result = plan(guaranteed);
+    const local = buildMissingInputReply(result.plan);
+    const hint = buildAppendedClarification(result.plan);
+    check(
+      `保证追问「${guaranteed}」：即使走知识路线也附缺项澄清`,
+      result.plan.intent !== 'chart' && (local !== null || (typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区'))),
+      `${result.plan.intent} local=${local === null ? '无' : '有'} hint=${hint === null ? '无' : '有'}`,
+    );
+  }
+  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？']) {
+    const result = plan(pure);
+    check(
+      `纯知识/无关问题「${pure}」不附缺项澄清（避免噪音）`,
+      buildMissingInputReply(result.plan) === null && buildAppendedClarification(result.plan) === null,
+      `${result.plan.intent}`,
+    );
+  }
   for (const meta of ['梅花起卦与六爻断卦怎么比较？', '起卦和断卦的区别是什么？', '六爻和梅花易数的区别']) {
     const method = plan(meta);
     check(`方法差别问法「${meta}」仍走资料比较，不误判为起卦`, method.plan.intent !== 'chart' && method.plan.missingInputs.length === 0, `${method.plan.intent}/${method.plan.missingInputs.join(',')}`);

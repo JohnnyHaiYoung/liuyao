@@ -94,9 +94,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 17 条含混合句与无标点并列、知识问法反例 4 条、方法问法对照 3 条）、引用校验、上下文装配、注入边界 | **60/60** |
+| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 21 条、知识问法反例、**方案 A 保证追问 2 条 + 噪音对照 5 条**）、引用校验、上下文装配、注入边界 | **67/67** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 14 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **54/54** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 15 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + **方案 A 消息级保证追问** + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **56/56** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
@@ -199,6 +199,20 @@
 | （反例）请教我用六爻起卦 | 一句歧义澄清 |
 
 **实测**：**先重建再验**（`npm run build` exit 0，`BUILD_ID` 晚于最新源码）→ `check:all --with-http --with-ui` 退出码 0、**11/11**；`check:orchestration` **60/60**、`check:e2e` **54/54**、浏览器级 **2/2**。
+## 9.10 方案 A「保证追问」（2026-10-07，产品方选定）
+
+**动机**：六轮复验的新措辞都击中同一类判定（起卦请求 vs 讲知识）。该判定的性质是"用中文关键词/位置启发式判定开放集意图"，继续逐条补样例无法给出收敛承诺。产品方因此选定方案 A：**改变失败模式**——只要句中像在要求起卦而输入不全，就必定附一句缺项澄清；代价是极少数知识问题会多一行提示。
+
+**实现**：`PlanObject` 新增 `appendedClarification`；最终返回路径上判定"命令式信号成立 + 无完整输入 + 未排盘 + 无本地缺项追问"时置为 `missing_inputs`，由 `buildAppendedClarification()` 生成提示文本；`stream-service` 把它作为**首个 `delta`** 发出并计入落库文本（流式与历史一致；回答末尾的「最终结果：」段落仍由模型给出，格式不变）。与本地缺项澄清互斥，不会重复追问。
+
+| 输入 | 结果 |
+| --- | --- |
+| 请问起一卦的步骤是什么 | source_comparison **+ 缺项澄清**（不再静默跳过） |
+| 算一卦和排一卦有什么区别？ | general **+ 缺项澄清** |
+| （噪音对照）我想了解六爻起卦的方法 / 请介绍一下如何用六爻起卦 / 帮我解释六爻起卦的步骤 / 什么是用神？/ 今天天气怎么样？ | 不附澄清 |
+| （仍为请求）请起一卦并解释起卦方法 / 帮我起卦 / 请用六爻帮我起卦，比较两份工作机会 | 本地缺项追问 |
+
+**实测**：**先重建再验** → `check:all --with-http --with-ui` 退出码 0、**11/11**；`check:orchestration` **67/67**、`check:e2e` **56/56**（含消息级断言 `model=fake-stream-v1` 且正文含"服务端提示/六次爻值/时区"）、浏览器级 **2/2**。
 ## 10. 真实上游联调记录（2026-10-07）
 
 环境：`app/.env.local` 配置 `DEEPSEEK_API_KEY`（DeepSeek 官方 `api.deepseek.com`）与 `QWEN_API_KEY`（阿里云百炼官方兼容模式 `dashscope.aliyuncs.com/compatible-mode/v1`）；所有联调**在正式库副本上**进行，正式 `storage/liuyao.db` 未被改动。

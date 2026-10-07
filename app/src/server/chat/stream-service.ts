@@ -13,7 +13,7 @@ import { deriveAutoTitle } from './title';
 import { loadCatalog, resolveProjectRoot, type WikiCatalog } from '../wiki/catalog';
 import { buildTurnContext, type TurnContext } from './context';
 import { buildSourceHref, validateCitations } from './citations';
-import { buildMissingInputReply, planTurn, type PlanObject } from './planner';
+import { buildAppendedClarification, buildMissingInputReply, planTurn, type PlanObject } from './planner';
 import * as chartSnapshots from '../chart/snapshots';
 import { summarizeChart, summarizeStoredChart } from '../chart/summary';
 import type { ChartInput } from '../chart/service';
@@ -196,6 +196,8 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
 
   // 缺项/含糊：由本地逻辑直接澄清，不调用模型（也必须落库并按事件契约呈现）
   const localReply = plan ? buildMissingInputReply(plan) : null;
+  // 方案 A「保证追问」：判定没当成起卦、但句中像在要求起卦且输入不全时，在回答开头附一句缺项澄清
+  const appendedHint = !localReply && plan ? buildAppendedClarification(plan) : null;
 
   const evidenceRefs: SseSourceRefData[] = (planned?.wiki.snippets ?? [])
     .filter((snippet) => snippet.citable && snippet.sourceId !== null && snippet.locatorType !== 'none')
@@ -367,6 +369,11 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
           }
           if (chartEvent) {
             send('chart', chartEvent);
+          }
+          if (appendedHint !== null) {
+            // 作为**首个**增量发出：客户端与历史一致，且回答末尾的「最终结果：」段落仍由模型给出（格式不变）
+            assistantText = `${appendedHint}\n\n`;
+            send('delta', { text: assistantText });
           }
           result = await provider.streamChat(
             {
