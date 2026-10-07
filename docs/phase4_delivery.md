@@ -224,9 +224,21 @@ node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs 
 # 一次性依赖
 cd app && npm ci            # 生产依赖：better-sqlite3 / lunar-typescript / next / react* / remark-gfm
 
-# 全部离线自检（不需要密钥、不需要网络）
-npm run check:wiki && npm run check:chart && npm run check:orchestration
-npm run check:migration-phase4 && npm run check:e2e && npm run check:qwen && npm run check:vendor
+# 全部离线自检（不需要密钥、不需要网络）—— 用这一条，跨 shell 一致
+npm run check:all
+# 附：阶段 1 HTTP 运行态回归（会临时起服务，独立测试库 + 假模型）
+npm run check:all -- --with-http
+# 附：真实上游联调（需 app/.env.local 配置密钥，产生极小费用）
+npm run check:all -- --with-live
+
+# 若只想单独跑某一项：请**逐条**执行，不要用 &&（Windows PowerShell 5.1 不支持 &&）
+npm run check:wiki
+npm run check:chart
+npm run check:orchestration
+npm run check:migration-phase4
+npm run check:e2e
+npm run check:qwen
+npm run check:vendor
 
 # HTTP 运行态回归（独立测试库 + 假模型；自动起停服务）
 npm run check:phase1-regression
