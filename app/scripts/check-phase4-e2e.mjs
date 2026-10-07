@@ -204,6 +204,35 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
     );
   }
 
+  // 复验报告（8dd1c09）P1：知识问法必须走模型（可答知识），不得变成排盘缺项追问
+  for (const knowledge of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤']) {
+    const { events, names } = await send(knowledge);
+    const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
+    const page = listMessages(db, conversationId, { limit: 50 });
+    const last = page.items.at(-1);
+    check(
+      `知识问法「${knowledge}」正常作答（非本地缺项追问）`,
+      last?.model !== 'local-clarification' && !text.includes('需要补充以下信息') && !names.includes('chart'),
+      `model=${last?.model} chart=${names.includes('chart')} 索取排盘输入=${text.includes('需要补充以下信息')}`,
+    );
+  }
+  // 歧义问法：只问一句"学习方法还是现在起卦"，且不索取排盘输入
+  {
+    const { events, names } = await send('请教我用六爻起卦');
+    const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
+    const page = listMessages(db, conversationId, { limit: 50 });
+    const last = page.items.at(-1);
+    check(
+      '歧义问法「请教我用六爻起卦」只问一句澄清、不索取排盘输入',
+      last?.model === 'local-clarification' &&
+        text.includes('学习方法') &&
+        text.includes('现在起一卦') &&
+        !text.includes('需要补充以下信息') &&
+        !names.includes('chart'),
+      `model=${last?.model} chart=${names.includes('chart')}`,
+    );
+  }
+
   const { events, names } = await send('帮我起一卦，爻值 8 7 8 8 8 7');
   const deltas = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
   const page = listMessages(db, conversationId, { limit: 50 });

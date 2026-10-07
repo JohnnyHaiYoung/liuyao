@@ -26,6 +26,11 @@ export interface PlanObject {
   /** 追问时绑定的旧盘 id（只读快照，不重算） */
   followUpChartRunId: string | null;
   chartError: { code: string; message: string } | null;
+  /**
+   * 本地澄清的种类（复验报告 8dd1c09）：`missing_inputs` = 缺排盘输入；
+   * `learn_or_cast` = "请教我用六爻起卦"这类既可理解为学习方法、也可理解为现在起卦的歧义问法。
+   */
+  clarificationKind?: 'missing_inputs' | 'learn_or_cast';
 }
 
 export interface PlanTurnParams {
@@ -73,6 +78,26 @@ const METHOD_COMPARISON_PATTERN = new RegExp(
   `(?:${METHOD_TERMS})[^。；！？]{0,8}(?:比较|区别|差异|是什么|怎么理解|如何理解|原理|介绍一下)` +
     `|(?:比较|区别|差异|什么是|是什么意思|怎么理解|如何理解|介绍一下)[^。；！？]{0,8}(?:${METHOD_TERMS})`,
 );
+
+/**
+ * 第三层：**知识/学法问法**（复验报告 8dd1c09 P1 的反向假阳性）。
+ *
+ * 报告指出：只要句中含起卦词就当成请求，会把「我想了解六爻起卦的方法」「请介绍一下如何用六爻起卦」
+ * 「帮我解释六爻起卦的步骤」「算一卦和排一卦有什么区别？」误判为排盘请求。
+ * 因此判定的是**用户当前要执行的动作**：先看有没有"现在替我起卦"的祈使（帮我/请帮我/替我/给我…），
+ * 再看起卦词是否只是被"了解/介绍/解释/如何/步骤/方法/区别"等词所谈论的对象。
+ */
+const KNOWLEDGE_VERBS = '了解|介绍|解释|讲解|说明|学习|想学|教我|怎么|如何|怎样|咋样|步骤|流程|原理|区别|差异|比较|是什么|什么意思|含义|用法|方法';
+/** 祈使：明确要求"现在替我起卦"。中间若夹了知识动词（如"帮我解释…起卦"）则不算祈使。 */
+const REQUEST_IMPERATIVE_PATTERN = new RegExp(
+  `(?:帮我|请帮|替我|给我|麻烦|帮忙)(?:(?!(?:${KNOWLEDGE_VERBS}))[^。；！？]){0,6}(?:${CAST_ACTION_WORDS})`,
+);
+/** 知识动词直接谈论起卦动作（如"了解六爻起卦""解释六爻起卦的步骤"）。 */
+const KNOWLEDGE_ABOUT_CAST_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})[^。；！？]{0,8}(?:${CAST_ACTION_WORDS})`);
+/** 起卦词之后紧跟比较/定义词（如"算一卦和排一卦有什么区别"）。 */
+const CAST_THEN_KNOWLEDGE_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})[^。；！？]{0,8}(?:区别|差异|比较|是什么|什么意思|含义)`);
+/** "请教/教我"这类学法问法：既可理解为学习方法，也可理解为现在起卦 → 只问一句澄清。 */
+const AMBIGUOUS_TEACH_PATTERN = new RegExp(`(?:请教|教我|教教)[^。；！？]{0,8}(?:${CAST_ACTION_WORDS})`);
 
 export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const question = String(params.question ?? '');
@@ -132,18 +157,47 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 3.5) 起卦/新卦请求但**完全没有输入**：只澄清，不调用模型（任务书第 2 节）。
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
-  // 先识别"是否在请求执行起卦/看具体卦"，再看它在比较现实对象还是知识体系（复验报告 3544422 P1）
+  // 先识别"用户当前要执行的动作"：是"现在替我起卦"，还是在问"怎样起卦"（复验报告 8dd1c09 P1）
   const hasCastAction = CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
+  const hasRequestImperative = REQUEST_IMPERATIVE_PATTERN.test(question);
+  const knowledgeAboutCast = KNOWLEDGE_ABOUT_CAST_PATTERN.test(question);
+  const castThenKnowledge = CAST_THEN_KNOWLEDGE_PATTERN.test(question);
+  const asksToBeTaught = AMBIGUOUS_TEACH_PATTERN.test(question);
   const looksLikeMethodQuestion = METHOD_COMPARISON_PATTERN.test(question);
-  const wantsCast = hasCastAction;
-  if (hasCastAction && looksLikeMethodQuestion) {
-    reasons.push('句中同时出现起卦动作与方法词：按"先追问缺项"处理（若你想问的是方法差别，请直接说明"区别/比较方法"）');
+  // 知识问答：在谈论起卦这件事（学习方法/步骤/术语差别），且没有"现在替我起卦"的祈使
+  const isKnowledgeQuestion =
+    !hasRequestImperative && (knowledgeAboutCast || castThenKnowledge || looksLikeMethodQuestion);
+  // 歧义："请教我用六爻起卦" —— 只问一句"学习方法还是现在起卦"，不索取排盘输入
+  const isAmbiguousLearnOrCast = asksToBeTaught && !hasRequestImperative;
+  const wantsCast = hasCastAction && !isKnowledgeQuestion && !isAmbiguousLearnOrCast;
+
+  if (isAmbiguousLearnOrCast && !hasAnyChartInput && !wantsNewChart) {
+    reasons.push('「请教/教我 + 起卦」既可理解为学习方法、也可理解为现在起卦：先问一句澄清，不调用模型');
+    return {
+      plan: {
+        intent: 'general',
+        chartAction: 'none',
+        selectedPageIds: wiki.selectedPages.map((page) => page.pageId),
+        selectedSids: wiki.snippets.filter((item) => item.citable).map((item) => item.sid),
+        missingInputs: [],
+        reasons,
+        ambiguities: extraction.ambiguities,
+        budgetExceeded: wiki.budgetExceeded,
+        promptVersion: params.promptVersion,
+        followUpChartRunId: null,
+        chartError: null,
+        clarificationKind: 'learn_or_cast',
+      },
+      wiki,
+      chart: null,
+    };
   }
-  if ((wantsCast || wantsNewChart) && !hasAnyChartInput) {
+
+  if ((wantsCast || (wantsNewChart && !isKnowledgeQuestion)) && !hasAnyChartInput) {
     reasons.push(
       wantsNewChart
         ? '识别为"另起一卦"请求，但没有新的爻值/时间输入：先澄清，不调用模型'
-        : '识别为起卦请求，但缺少六爻与时间输入：先澄清，不调用模型',
+        : '识别为"现在替我起卦"的请求，但缺少六爻与时间输入：先澄清，不调用模型',
     );
     return {
       plan: {
@@ -158,6 +212,7 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
         promptVersion: params.promptVersion,
         followUpChartRunId: null,
         chartError: null,
+        clarificationKind: 'missing_inputs',
       },
       wiki,
       chart: null,
@@ -207,6 +262,17 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
 
 /** 缺项追问文本由本地逻辑生成（不经模型），保证措辞不会被上游改写。 */
 export function buildMissingInputReply(plan: PlanObject): string | null {
+  // 歧义问法（"请教我用六爻起卦"）：只问一句"学习方法还是现在起卦"，**不**索取排盘输入
+  if (plan.clarificationKind === 'learn_or_cast') {
+    return [
+      '你的问题有两种理解，先确认一下：',
+      '',
+      '- 想**学习方法**：我可以讲起卦的步骤与要点（会标注来源；本地资料不足时说明依据不足）',
+      '- 想**现在起一卦**：请给出六爻值（自下而上、初爻在前）与起卦时间、时区，由服务端排盘',
+      '',
+      '最终结果：请先确认你要「学习方法」还是「现在起一卦」，我再继续。',
+    ].join('\n');
+  }
   if (plan.missingInputs.length === 0 && plan.ambiguities.length === 0) return null;
   const lines: string[] = ['需要补充以下信息才能排盘：'];
   if (plan.missingInputs.includes('lineValues')) lines.push('- 六次爻值（自下而上、初爻在前），例如「8 7 8 8 8 7」；6=老阴动、7=少阳、8=少阴、9=老阳动');

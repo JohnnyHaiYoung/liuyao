@@ -86,11 +86,35 @@ console.log('=== 1) 意图判定与计划对象 ===');
       `${casting.plan.intent}/${casting.plan.chartAction} missing=${casting.plan.missingInputs.join(',')}`,
     );
   }
-  const ambiguous = plan('请用六爻帮我起卦，比较两份工作机会');
+  // 复验报告（8dd1c09）P1 的**反向假阳性**：知识/学法问法不得被当成"现在替我起卦"
+  const knowledgeSamples = [
+    '我想了解六爻起卦的方法',
+    '请介绍一下如何用六爻起卦',
+    '帮我解释六爻起卦的步骤',
+    '算一卦和排一卦有什么区别？',
+  ];
+  for (const knowledge of knowledgeSamples) {
+    const result = plan(knowledge);
+    const reply = buildMissingInputReply(result.plan);
+    check(
+      `知识问法「${knowledge}」不被判成起卦、不索取排盘输入`,
+      result.plan.intent !== 'chart' &&
+        result.plan.missingInputs.length === 0 &&
+        (reply === null || !reply.includes('需要补充以下信息')),
+      `${result.plan.intent} missing=${result.plan.missingInputs.join(',')} 澄清=${reply === null ? '无' : '有'}`,
+    );
+  }
+  const taught = plan('请教我用六爻起卦');
+  const taughtReply = buildMissingInputReply(taught.plan);
   check(
-    '起卦动作与方法词同时出现时说明"先追问"的理由',
-    ambiguous.plan.reasons.some((item) => item.includes('同时出现起卦动作与方法词')),
-    ambiguous.plan.reasons.find((item) => item.includes('同时出现起卦动作与方法词')) ?? '(无)',
+    '歧义问法「请教我用六爻起卦」只问一句"学习方法还是现在起卦"',
+    taught.plan.clarificationKind === 'learn_or_cast' &&
+      taught.plan.missingInputs.length === 0 &&
+      typeof taughtReply === 'string' &&
+      taughtReply.includes('学习方法') &&
+      taughtReply.includes('现在起一卦') &&
+      !taughtReply.includes('需要补充以下信息'),
+    `${taught.plan.intent}/${taught.plan.clarificationKind}`,
   );
   for (const meta of ['梅花起卦与六爻断卦怎么比较？', '起卦和断卦的区别是什么？', '六爻和梅花易数的区别']) {
     const method = plan(meta);
