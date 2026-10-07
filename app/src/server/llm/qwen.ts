@@ -82,12 +82,15 @@ function toUsage(raw: DashScopeChunk['usage']): LlmUsage {
 export function classifyQwenError(status: number, body: DashScopeChunk | null): { code: string; detail: string } {
   const upstreamCode = body?.error?.code ?? body?.code ?? '';
   const detail = body?.error?.message ?? body?.message ?? `HTTP ${status}`;
+  const haystack = `${upstreamCode} ${detail}`;
+  // 额度/欠费类必须**先判**：实测阿里云在"仅免费额度模式且额度用尽"时返回 **403** 而不是 402，
+  // 若按状态码先映射就会被误报成"认证失败"（真实样例：AllocationQuota.FreeTierOnly）。
+  if (/Arrearage|QuotaExhausted|FreeTierOnly|AllocationQuota|insufficient|balance|欠费|额度/i.test(haystack)) {
+    return { code: ERROR_CODES.upstreamInsufficientBalance, detail };
+  }
   if (status === 401 || status === 403) return { code: ERROR_CODES.upstreamAuthError, detail };
   if (status === 429) return { code: ERROR_CODES.upstreamRateLimited, detail };
   if (status === 408 || status === 504) return { code: ERROR_CODES.upstreamTimeout, detail };
-  if (status === 400 && /Arrearage|QuotaExhausted|insufficient|balance/i.test(`${upstreamCode} ${detail}`)) {
-    return { code: ERROR_CODES.upstreamInsufficientBalance, detail };
-  }
   if (status >= 500) return { code: ERROR_CODES.upstreamUnavailable, detail };
   if (status >= 400) return { code: ERROR_CODES.upstreamBadRequest, detail };
   return { code: ERROR_CODES.upstreamError, detail };

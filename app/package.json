@@ -22,6 +22,8 @@
     "check:vendor": "node scripts/check-paipan-vendor.mjs",
     "check:qwen": "node --import ./scripts/lib/register-ts.mjs scripts/check-qwen-adapter.mjs",
     "check:phase1-regression": "node scripts/check-phase1-regression.mjs",
+    "check:provider-live": "node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs",
+    "check:provider-real": "node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs",
     "check:migration-phase4": "node --import ./scripts/lib/register-ts.mjs scripts/check-migration-phase4.mjs"
   },
   "dependencies": {

@@ -61,6 +61,11 @@ const server = http.createServer((request, response) => {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ code: 'Arrearage', message: 'Access denied, please make sure your account is in good standing.' }));
         return;
+      case 'mode-free-tier-403':
+        // 真实样例：阿里云在"仅免费额度模式且额度用尽"时返回 403 而不是 402
+        response.writeHead(403, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: { message: 'Free quota exhausted. To continue accessing the model on a paid basis, please add funds or disable the "use free tier only" mode in the management console.', type: 'AllocationQuota.FreeTierOnly', code: 'AllocationQuota.FreeTierOnly' } }));
+        return;
       case 'mode-slow': // 用于客户端中断
         response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' });
         response.write(delta('慢慢说'));
@@ -135,6 +140,12 @@ console.log('\n=== HTTP 错误分类 ===');
   check('401 → upstream_auth_error', unauthorized.result.errorCode === 'upstream_auth_error', String(unauthorized.result.errorCode));
   const arrearage = await run('mode-arrearage');
   check('400 + Arrearage → 余额不足类错误', arrearage.result.errorCode === 'upstream_insufficient_balance', String(arrearage.result.errorCode));
+  const freeTier = await run('mode-free-tier-403');
+  check(
+    '403 + AllocationQuota.FreeTierOnly → 余额/额度类错误（不得误报为认证失败）',
+    freeTier.result.errorCode === 'upstream_insufficient_balance',
+    `${freeTier.result.errorCode}｜${String(freeTier.result.errorDetail ?? '').slice(0, 60)}`,
+  );
 }
 
 console.log('\n=== 客户端中断 ===');

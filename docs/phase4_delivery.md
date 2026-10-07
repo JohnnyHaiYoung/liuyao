@@ -97,8 +97,10 @@
 | `npm --prefix app run check:orchestration` | 意图判定（纯起卦、**混合问法**、方法类比较的区分）、引用校验、上下文装配、注入边界 | **42/42** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
 | `npm --prefix app run check:e2e` | 四条主流程 + 纯/混合起卦澄清（无盘、无候选、无上游）+ 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **41/41** |
-| `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游） | 21/21 |
+| `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
+| `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
+| `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs` | **真实模型走完整聊天流程**（适配器+编排+快照+事件），需密钥、产生极小费用 | 13/13 |
 | `npm --prefix app run check:phase1-regression` | 起真实服务跑既有阶段 1 验收 | 8/8（内含 37/37） |
 | `node tools/corpus-cli.ts verify` | 阶段 2 资料完整性 | 108 项通过 |
 
@@ -134,14 +136,51 @@
 
 **本次实测**：`check:orchestration` **42/42**、`check:e2e` **41/41**（含两条混合问法断言"无盘、无候选、无上游调用"）、其余套件不变（wiki 17/17+28/28、chart 32/32、migration 30/30、qwen 21/21、vendor 11/11）、`check:phase1-regression` **8/8**（内含阶段 1 **37/37**）、`typecheck` 与 `next build` exit 0、阶段 2 资料 108 项通过。
 
-## 10. 第三阶段两处非阻断勘误的修正
+## 10. 真实上游联调记录（2026-10-07）
+
+环境：`app/.env.local` 配置 `DEEPSEEK_API_KEY`（DeepSeek 官方 `api.deepseek.com`）与 `QWEN_API_KEY`（阿里云百炼官方兼容模式 `dashscope.aliyuncs.com/compatible-mode/v1`）；所有联调**在正式库副本上**进行，正式 `storage/liuyao.db` 未被改动。
+
+**13.1 连通性与最小真实对话**（`scripts/check-provider-live.mjs`，结果 6/6）：
+
+| 检查 | DeepSeek（deepseek-flash） | 千问（qwen3.7-plus） |
+| --- | --- | --- |
+| `GET /models` | HTTP 200，清单 2 个模型且含目标模型 | HTTP 200，清单 262 个模型且含目标模型 |
+| 伪造密钥对照 | — | `/models` 返回 **401**（证明该端点确实校验密钥） |
+| 最小真实对话（max_tokens=1） | HTTP 200（725–863ms） | HTTP 200（2528ms） |
+
+期间遇到并已定位的问题：千问曾返回 **403 `AllocationQuota.FreeTierOnly`**（账号处于"仅使用免费额度"且额度用尽），提示语逐字为 `Free quota exhausted … add funds or disable the "use free tier only" mode`。这是账号侧设置，非配置或代码问题；解除后真实对话即 HTTP 200。
+**顺带修复的代码缺陷**：该 403 曾被 `classifyQwenError` 按状态码映射为 `upstream_auth_error`（会误导用户去查密钥）。现改为额度/欠费类关键词优先判定，归为 `upstream_insufficient_balance`，并新增回归样例（`check:qwen` 22/22）。
+
+**13.2 真实模型走完整聊天流程**（`scripts/check-provider-real-e2e.mjs`，结果 **13/13**，脚本自身退出码 0）：
+
+| 项目 | DeepSeek · 概念问题 | 千问 · 具体卦例 |
+| --- | --- | --- |
+| 事件链路 | `start → sources → delta×234 → done`（2184ms） | `start → chart → delta×76 → done`（22614ms） |
+| 正文 | 339 字符，含「最终结果：」 | 321 字符，含「最终结果：」 |
+| 用量（in/out/total） | 2525 / 234 / 2759 | 1934 / 1288 / 3222 |
+| 历史 provider/model | `deepseek` / `deepseek-flash` | `qwen` / `qwen3.7-plus` |
+| 来源 | 候选 3 条（`candidate=true`）；模型**真实引用了 S1、S2、S3**（`done.sourceIds`） | 候选按需；盘面事件 `action=new` |
+| 盘面快照 | —（概念问题无盘） | 山水蒙 / 日柱己亥；`done.chartRunId` 与历史读回的 `canonicalHash=b0ae2924b874…` 一致 |
+
+**联调暴露的一个运维要点**：DeepSeek 在 `LLM_REASONING_EFFORT=high` 且把 `LLM_MAX_OUTPUT_TOKENS` 设成很小的值（联调时为控费用设 400）时，**思考 token 会吃满输出预算**，可见正文为空、`finish_reason=length`（历史会记 `output_limit_reached`）。正式配置不设该上限（用官方默认，`.env.example` 中该项默认注释），因此正常使用不受影响；若要手动调小上限，建议同时把 `LLM_REASONING_EFFORT` 设为 `none`。
+
+复跑命令：
+
+```bash
+cd app
+node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs          # 免费：只探测可达性与模型名
+node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs --chat   # 真实对话（每模型 1 token）
+node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs      # 真实模型走完整聊天流程（约 2 次短调用）
+```
+
+## 11. 第三阶段两处非阻断勘误的修正
 
 1. **卦宫是否自动比较**：`paipan/scripts/upstream-compare.mjs` 已补**卦宫机器比较**（我方 vs JS vs Python，归一五行后缀与「宫」字），差异计入非零退出；`docs/phase3_delivery.md` 第 3 节的表述与实现一致。
 2. **旧迁移验证文字**：`docs/phase3_delivery.md` 第 7 节已删除"2026-10-04 实际结果/随包 `node_modules`"旧叙述，替换为新目录按锁文件 `npm ci --omit=dev` 重装的真实记录，并保留"不证明服务器可访问 npm registry"的边界。
 
-## 11. 已知限制与未完成项
+## 12. 已知限制与未完成项
 
-1. **未做**真实 DeepSeek/千问 API 联调记录（无可用密钥）：千问证据来自本地模拟上游；DeepSeek 证据来自阶段 1 的真实联调记录与本地假模型链路。
+1. ~~未做真实 API 联调~~ **已补做（2026-10-07）**：见第 10 节。DeepSeek 与千问均通过真实调用；其中的额度/记账问题的处理结论也已记录。
 2. ~~客户端模型列表尚未暴露千问~~ **已解决**：新增 `GET /api/models`（登录后返回可用模型）与前端选择器；未配置密钥时只列出 `deepseek-flash`，配置后新增 `qwen3.7-plus` 且默认模型不变（离线自检实测两种情形，见 `check:qwen`）。
 3. ~~证据块是会话内聚合展示~~ **已解决**：改为按**每条助手消息**渲染其自身快照，流式证据只属于当前流式消息；切换/新建会话立即清除（复验报告 P1-3）。
 4. Next 仍打印 20 条"整项目会被追踪"的静态分析提示；已配置 `outputFileTracingExcludes`（`storage/**`、`corpus/originals/**` 等），但**不声称告警消失**；standalone 产物是否完全干净需阶段 5 发布包验证。
@@ -150,7 +189,7 @@
 7. **UI 级自动化缺失**：跨会话切换、模型切换竞态等页面行为没有浏览器级测试，目前靠代码结构（ref、切换即清理）+ 服务端断言间接保证，需人工或浏览器级复验（见第 9.5 节末）。
 8. 现实占断命中率**未**、也不能用本阶段自检证明。
 
-## 12. 复跑入口
+## 13. 复跑入口
 
 ```bash
 # 一次性依赖
