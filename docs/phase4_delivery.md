@@ -102,6 +102,7 @@
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs` | **真实模型走完整聊天流程**（适配器+编排+快照+事件），需密钥、产生极小费用 | 13/13 |
 | `npm --prefix app run check:phase1-regression` | 起真实服务跑既有阶段 1 验收 | 8/8（内含 37/37） |
+| `npm --prefix app run check:ui` | **浏览器级验收（Playwright + 本机 Chrome）**：依据随消息、切会话不残留、切换模型立刻发送 | 2/2 |
 | `node tools/corpus-cli.ts verify` | 阶段 2 资料完整性 | 108 项通过 |
 
 均为离线可复跑；除 `check:phase1-regression` 外都不需要启动服务，全部不需要真实密钥。
@@ -213,7 +214,13 @@ node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs 
 4. Next 仍打印 20 条"整项目会被追踪"的静态分析提示；已配置 `outputFileTracingExcludes`（`storage/**`、`corpus/originals/**` 等），但**不声称告警消失**；standalone 产物是否完全干净需阶段 5 发布包验证。
 5. 未实现：用神选取的权威口径、吉凶/应期算法、真太阳时；这些属带来源标签的解释，不是本阶段软件正确性范围。
 6. 阶段 2 的 `storage/tmp/accept-unpack*` 遗留目录（约 21 MB，`storage/` 不入库）可随时清理。
-7. **UI 级自动化缺失**：跨会话切换、模型切换竞态等页面行为没有浏览器级测试，目前靠代码结构（ref、切换即清理）+ 服务端断言间接保证，需人工或浏览器级复验（见第 9.5 节末）。
+7. ~~UI 级自动化缺失~~ **已补齐（2026-10-07，产品方同意引入开发依赖）**：新增 Playwright 浏览器级验收
+   `npm run check:ui`（→ `app/e2e/phase4-ui.spec.ts`），**复用本机 Chrome**（`channel: 'chrome'`，不下载自带浏览器），
+   在**隔离空库 + 模拟上游**上运行，覆盖复验要求的两条页面行为：
+   - **依据绑定各自消息**：概念问题后该条助手消息显示「展开依据」；点「+ 新建聊天」后 `.message-evidence` 数为 0（不残留）；回到旧会话后依据从历史快照恢复；
+   - **输入后切换模型立刻发送**：抓取发出请求的 `model` 字段，断言等于 `qwen3.7-plus`；并断言模拟上游确实收到千问调用（反向证明未打真实 API）。
+   实测：`2 passed (4.5s)`，诊断输出 `上游是否看到编号证据=true 编号=S1`。
+   说明：浏览器级自动化**不能替代功能修复**，它是回归防线；仍不覆盖真实 API 联调、视觉/样式与移动端布局。
 8. 现实占断命中率**未**、也不能用本阶段自检证明。
 9. **前端"非强制六爻值输入区"：本轮明确不做（产品方 2026-10-07 决定）**。产品需求 §2 用词为"可附"、任务书 §2 为"可加"，属可选；服务端结构化 `chartInput` 契约与文本提取已具备，页面暂无该控件。产品方判断：面向初学者的**完整起卦引导**更适合后续单独设计，不在本轮加一个孤立的 6 格输入。若将来实现，应连同引导文案、校验提示与回归断言一起做。
    （验收文档流程：验收/复验报告等文档由**验收方**核对、去重后单独处理，研发不整批代提交。）
@@ -229,6 +236,8 @@ cd app && npm ci            # 生产依赖：better-sqlite3 / lunar-typescript /
 npm run check:all
 # 附：阶段 1 HTTP 运行态回归（会临时起服务，独立测试库 + 假模型）
 npm run check:all -- --with-http
+# 附：浏览器级验收（Playwright，复用本机 Chrome；需先 npm run build）
+npm run check:all -- --with-ui
 # 附：真实上游联调（需 app/.env.local 配置密钥，产生极小费用）
 npm run check:all -- --with-live
 

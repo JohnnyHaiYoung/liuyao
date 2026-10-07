@@ -25,7 +25,9 @@
     "check:provider-live": "node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs",
     "check:provider-real": "node --import ./scripts/lib/register-ts.mjs scripts/check-provider-real-e2e.mjs",
     "check:all": "node scripts/check-all.mjs",
-    "check:migration-phase4": "node --import ./scripts/lib/register-ts.mjs scripts/check-migration-phase4.mjs"
+    "check:migration-phase4": "node --import ./scripts/lib/register-ts.mjs scripts/check-migration-phase4.mjs",
+    "check:ui": "playwright test",
+    "check:ui-headed": "playwright test --headed"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
@@ -37,6 +39,7 @@
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.6.3",
     "@types/react": "19.3.0",

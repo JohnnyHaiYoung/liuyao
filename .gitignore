@@ -32,3 +32,8 @@ __pycache__/
 /storage/*
 !/storage/README.md
 /storage/**/server-*.log
+
+# 浏览器级测试产物（阶段 4）
+app/test-results/
+app/playwright-report/
+app/e2e/.runtime.json

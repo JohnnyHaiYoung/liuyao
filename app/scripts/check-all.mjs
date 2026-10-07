@@ -9,6 +9,7 @@
  * 用法（任选其一）：
  *   npm run check:all                 # 全部离线检查（不需要密钥/网络）
  *   npm run check:all -- --with-http   # additionally 跑阶段 1 HTTP 运行态回归（会临时起服务）
+ *   npm run check:all -- --with-ui     # additionally 跑浏览器级验收（需先 npm run build，用本机 Chrome）
  *   npm run check:all -- --with-live   # additionally 跑真实上游联调（需要密钥，会产生极小费用）
  *
  * 子进程用 stdio: 'inherit' 直接透传输出，避免在受限环境里因管道捕获失败（EPERM）。
@@ -20,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(here, '..');
 const withHttp = process.argv.includes('--with-http');
+const withUi = process.argv.includes('--with-ui');
 const withLive = process.argv.includes('--with-live');
 
 /** 每项：[名称, node 参数数组]（-i 表示需要 TS 解析钩子） */
@@ -36,6 +38,10 @@ const checks = [
 ];
 
 if (withHttp) checks.push(['阶段 1 HTTP 运行态回归', ['scripts/check-phase1-regression.mjs']]);
+if (withUi) {
+  // 浏览器级验收：Playwright（复用本机 Chrome；隔离空库 + 模拟上游，不碰正式库与真实 API）
+  checks.push(['浏览器级验收（Playwright，本机 Chrome）', ['ui'], 'ui']);
+}
 if (withLive) {
   checks.push(['真实上游连通性（不耗 token）', ['scripts/check-provider-live.mjs'], 'ts']);
   checks.push(['真实模型走完整聊天流程', ['scripts/check-provider-real-e2e.mjs'], 'ts']);
@@ -50,7 +56,14 @@ console.log(`一键自检：共 ${checks.length} 项${withHttp ? '（含 HTTP �
 for (const [name, args, mode] of checks) {
   console.log(`${'─'.repeat(72)}\n▶ ${name}\n${'─'.repeat(72)}`);
   const cliArgs = mode === 'ts' ? ['--import', hook, ...args] : args;
-  const run = spawnSync(process.execPath, cliArgs, { cwd: appDir, stdio: 'inherit', windowsHide: true });
+  const run =
+    mode === 'ui'
+      ? spawnSync(process.execPath, [path.join(appDir, 'node_modules', '@playwright', 'test', 'cli.js'), 'test'], {
+          cwd: appDir,
+          stdio: 'inherit',
+          windowsHide: true,
+        })
+      : spawnSync(process.execPath, cliArgs, { cwd: appDir, stdio: 'inherit', windowsHide: true });
   const ok = run.status === 0;
   results.push({ name, ok, status: run.status });
   console.log(ok ? `✔ ${name} 通过\n` : `✘ ${name} 未通过（退出码 ${run.status ?? 'null'}）\n`);
