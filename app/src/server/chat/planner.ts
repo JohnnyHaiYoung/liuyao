@@ -69,9 +69,18 @@ const NEW_CHART_MARKERS = ['新卦', '另起', '重新起卦', '再起一卦', '
  * 与此同时保留若干**本身就是请求**的强动作词（不含裸"起卦"，避免"起卦和断卦的区别"被误判）。
  */
 const CAST_MODIFIERS = '请|麻烦|帮我|帮|替我|给我|我要|我想|我求|求|另|再|重新|用[^，。；！？]{0,4}|以[^，。；！？]{0,4}|通过[^，。；！？]{0,4}';
-const CAST_ACTION_WORDS = '起卦|起一卦|摇卦|摇一卦|占一卦|卜一卦|看一卦|看卦|看这卦|看下卦|断一卦|排一卦|算一卦|求一卦';
+/**
+ * 起卦动作的**形态规则**（复验 5f1d2f1 后按方案 A 加固）：动词 + 可选量词 + 卦，
+ * 不再只枚举整句——「起个卦/摇个卦/来一卦/问一卦/占卜/问卦/求卦」等变体一并覆盖。
+ * 刻意不含"断"：断卦属解读，不是起卦动作。
+ */
+const CAST_ACTION_VERBS = '起|摇|占|卜|看|排|算|求|问|掷';
+const CAST_ACTION_WORDS = `${CAST_ACTION_VERBS}(?:个|一|1)?卦|来(?:个|一|1)卦|打(?:个|一|1)?卦|看这卦|看下卦|断一卦|占卜|问卦|求卦`;
 const CAST_ACTION_PATTERN = new RegExp(`(?:${CAST_MODIFIERS})[^，。；！？]{0,6}(?:${CAST_ACTION_WORDS})`);
-/** 不含裸「起卦」的强动作词：出现即视为请求。 */
+/** 强动作（出现即偏"请求"）：形态规则本身 + 若干固定说法。裸"起卦"是否算请求由位置规则决定。 */
+const CAST_STRONG_PATTERN = new RegExp(
+  `(?:${CAST_ACTION_VERBS})(?:个|一|1)?卦|来(?:个|一|1)卦|打(?:个|一|1)?卦|占卜|问卦|求卦`,
+);
 const CAST_STRONG_ACTIONS = ['起一卦', '摇一卦', '占一卦', '卜一卦', '看一卦', '摇卦', '排一卦', '算一卦', '求一卦', '看这卦'];
 
 /**
@@ -99,8 +108,10 @@ const REQUEST_IMPERATIVE_PATTERN = new RegExp(
 );
 /** 知识动词直接谈论起卦动作（如"了解六爻起卦""解释六爻起卦的步骤"）。 */
 const KNOWLEDGE_ABOUT_CAST_PATTERN = new RegExp(`(?:${KNOWLEDGE_VERBS})[^。；！？]{0,8}(?:${CAST_ACTION_WORDS})`);
-/** 起卦词之后紧跟比较/定义词（如"算一卦和排一卦有什么区别"）。 */
-const CAST_THEN_KNOWLEDGE_PATTERN = new RegExp(`(?:${CAST_ACTION_WORDS})[^。；！？]{0,8}(?:区别|差异|比较|是什么|什么意思|含义)`);
+/** 起卦词之后紧跟比较/**知识名词**（如"算一卦和排一卦有什么区别""起卦的方法"）→ 属讲知识，不算请求。 */
+const CAST_THEN_KNOWLEDGE_PATTERN = new RegExp(
+  `(?:${CAST_ACTION_WORDS})[^。；！？]{0,8}(?:区别|差异|比较|是什么|什么意思|含义|方法|步骤|流程|原理|用法)`,
+);
 /** "请教/教我"这类学法问法：既可理解为学习方法，也可理解为现在起卦 → 只问一句澄清。 */
 const AMBIGUOUS_TEACH_PATTERN = new RegExp(`(?:请教|教我|教教)[^。；！？]{0,8}(?:${CAST_ACTION_WORDS})`);
 
@@ -147,6 +158,7 @@ export function isCastRequestClause(clause: string): boolean {
   return (
     REQUEST_IMPERATIVE_PATTERN.test(trimmed) ||
     CLAUSE_BARE_ACTION_PATTERN.test(trimmed) ||
+    CAST_STRONG_PATTERN.test(trimmed) ||
     CAST_STRONG_ACTIONS.some((marker) => trimmed.includes(marker))
   );
 }
@@ -300,8 +312,18 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 目的是让"漏判"的后果从"不追问"变成"多问一句"，不再能被新措辞绕过。
   const commandLike =
     REQUEST_IMPERATIVE_PATTERN.test(question) ||
-    CAST_STRONG_ACTIONS.some((marker) => question.includes(marker)) ||
-    clauseList.some((clause) => CLAUSE_BARE_ACTION_PATTERN.test(clause));
+    clauseList.some((clause) => {
+      const action = CLAUSE_FIRST_ACTION_PATTERN.exec(clause);
+      if (!action) return false;
+      // 知识动词在动作之前（"解释六爻起卦的步骤"）或知识名词在动作之后（"起卦的方法"）→ 讲知识，不算命令式
+      if (CLAUSE_HAS_KNOWLEDGE_PATTERN.test(clause.slice(0, action.index))) return false;
+      if (CAST_THEN_KNOWLEDGE_PATTERN.test(clause.slice(action.index))) return false;
+      return (
+        REQUEST_IMPERATIVE_PATTERN.test(clause) ||
+        CAST_STRONG_PATTERN.test(clause) ||
+        CLAUSE_BARE_ACTION_PATTERN.test(clause)
+      );
+    });
   const appendedClarification =
     commandLike && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0 ? 'missing_inputs' : null;
   if (appendedClarification !== null) {

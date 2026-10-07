@@ -83,6 +83,16 @@ console.log('=== 1) 意图判定与计划对象 ===');
     '请起一卦且说明起卦步骤',
     '请起一卦并介绍六爻起卦的方法',
     '帮我起一卦并说明用神怎么看',
+    // 方案 A 加固后的**对抗样例**：未预设的形态变体（动词+量词+卦 / 占卜 / 问卦）
+    '帮我起个卦',
+    '帮我摇个卦，顺便讲讲方法',
+    '请帮我卜一卦',
+    '占卜一下我的工作',
+    '帮我问一卦事业',
+    '来一卦吧',
+    '打一卦看看',
+    '掷一卦看看',
+    '六爻起卦怎么弄',
   ];
   for (const mixed of castSamples) {
     const casting = plan(mixed);
@@ -127,15 +137,21 @@ console.log('=== 1) 意图判定与计划对象 ===');
       !taughtReply.includes('需要补充以下信息'),
     `${taught.plan.intent}/${taught.plan.clarificationKind}`,
   );
-  // 方案 A「保证追问」：命令式措辞即使被判为知识/概念，也必须附一句缺项澄清（不会静默跳过）
-  for (const guaranteed of ['请问起一卦的步骤是什么', '算一卦和排一卦有什么区别？']) {
-    const result = plan(guaranteed);
-    const local = buildMissingInputReply(result.plan);
-    const hint = buildAppendedClarification(result.plan);
+  // 方案 A 的安全网：附加澄清文本可用（触发条件由"命令式子句"判定；知识形问法不再附加，避免噪音）
+  check(
+    '保证追问文本可用（安全网，单元级）',
+    (() => {
+      const hint = buildAppendedClarification({ appendedClarification: 'missing_inputs' });
+      return typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区');
+    })(),
+    'buildAppendedClarification',
+  );
+  for (const knowledgeShaped of ['请问起一卦的步骤是什么', '算一卦和排一卦有什么区别？']) {
+    const result = plan(knowledgeShaped);
     check(
-      `保证追问「${guaranteed}」：即使走知识路线也附缺项澄清`,
-      result.plan.intent !== 'chart' && (local !== null || (typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区'))),
-      `${result.plan.intent} local=${local === null ? '无' : '有'} hint=${hint === null ? '无' : '有'}`,
+      `知识形问法「${knowledgeShaped}」不追问、不附加澄清（避免噪音）`,
+      buildMissingInputReply(result.plan) === null && buildAppendedClarification(result.plan) === null,
+      `${result.plan.intent}`,
     );
   }
   for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？']) {
@@ -146,6 +162,15 @@ console.log('=== 1) 意图判定与计划对象 ===');
       `${result.plan.intent}`,
     );
   }
+  // 形态规则不得把"将来卦象"这类词界误判为起卦动作
+  const wordBoundary = plan('将来卦象如何');
+  check(
+    '词界反例「将来卦象如何」不判为起卦、也不附澄清',
+    wordBoundary.plan.intent !== 'chart' &&
+      buildMissingInputReply(wordBoundary.plan) === null &&
+      buildAppendedClarification(wordBoundary.plan) === null,
+    `${wordBoundary.plan.intent}`,
+  );
   for (const meta of ['梅花起卦与六爻断卦怎么比较？', '起卦和断卦的区别是什么？', '六爻和梅花易数的区别']) {
     const method = plan(meta);
     check(`方法差别问法「${meta}」仍走资料比较，不误判为起卦`, method.plan.intent !== 'chart' && method.plan.missingInputs.length === 0, `${method.plan.intent}/${method.plan.missingInputs.join(',')}`);

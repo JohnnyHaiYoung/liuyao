@@ -224,19 +224,17 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
       `model=${last?.model} chart=${names.includes('chart')} 索取排盘输入=${text.includes('需要补充以下信息')}`,
     );
   }
-  // 方案 A「保证追问」的消息级断言：判定走知识路线时，回答开头仍必须带缺项澄清
+  // 知识形问法（含起卦词但在问"步骤/区别"）：应由模型正常作答，且**不**附加缺项澄清（避免噪音）
   {
     const { events, names } = await send('请问起一卦的步骤是什么');
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
     const page = listMessages(db, conversationId, { limit: 50 });
     const last = page.items.at(-1);
     check(
-      '保证追问：知识路线也必须附缺项澄清（消息级）',
+      '知识形问法由模型作答、不追加缺项提示（消息级）',
       last?.model !== 'local-clarification' &&
         names.includes('delta') &&
-        text.includes('服务端提示') &&
-        text.includes('六次爻值') &&
-        text.includes('时区') &&
+        !text.includes('服务端提示') &&
         !names.includes('chart'),
       `model=${last?.model} 含提示=${text.includes('服务端提示')}`,
     );
