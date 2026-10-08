@@ -57,6 +57,25 @@ console.log('=== 1) 意图判定与计划对象 ===');
 
   const followUp = plan('那这卦的应期呢？', { currentChartRunId: 'run-123' });
   check('旧盘追问 → 沿用快照且不重算', followUp.plan.chartAction === 'follow_up' && followUp.plan.followUpChartRunId === 'run-123' && followUp.chart === null, `${followUp.plan.chartAction}/${followUp.plan.followUpChartRunId}`);
+
+  // 复验 83be120 P1："这卦/这盘 + 怎么看/怎么解读/如何分析"是指向当前盘的追问，须沿用旧盘
+  for (const q of ['这卦怎么看', '这个卦怎么解读', '这盘如何分析', '这卦怎么看事业', '这卦怎么断', '那这卦的应期如何判断', '这盘如何解读工作', '刚才那卦怎么理解']) {
+    const withChart = plan(q, { currentChartRunId: 'old-run-123' });
+    check(
+      `有盘时「${q}」沿用旧盘（follow_up 绑定 old-run-123）`,
+      withChart.plan.intent === 'chart_follow_up' &&
+        withChart.plan.chartAction === 'follow_up' &&
+        withChart.plan.followUpChartRunId === 'old-run-123' &&
+        withChart.chart === null,
+      `${withChart.plan.intent}/${withChart.plan.chartAction}/${withChart.plan.followUpChartRunId}`,
+    );
+    const noChart = plan(q);
+    check(
+      `无盘时「${q}」提示补充盘面（missing 含 chart）`,
+      noChart.plan.intent === 'chart_follow_up' && noChart.plan.missingInputs.includes('chart'),
+      `${noChart.plan.intent}/${noChart.plan.missingInputs.join(',')}`,
+    );
+  }
   check('追问时盘面不因当前时间变化（不产生新盘）', followUp.chart === null, 'chart=null');
 
   const vague = plan('用 878887 起一卦');
@@ -172,7 +191,7 @@ console.log('=== 1) 意图判定与计划对象 ===');
       `${result.plan.intent}`,
     );
   }
-  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作', '如果要算一卦该怎么操作', '起卦后该怎么断卦', '这卦怎么看']) {
+  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作', '如果要算一卦该怎么操作', '起卦后该怎么断卦', '如何学会断卦']) {
     const result = plan(pure);
     check(
       `纯知识/无关问题「${pure}」不附缺项澄清（避免噪音）`,

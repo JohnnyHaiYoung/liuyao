@@ -94,9 +94,9 @@
 | --- | --- | --- |
 | `npm --prefix app run check:wiki` | 目录一致性（10 页/哈希）+ 选页 17 项 + 来源接口安全 28 项 | 17/17、28/28 |
 | `npm --prefix app run check:chart` | 与阶段 3 CLI `--canonical` 逐字段一致、缺项、非法输入、哈希稳定、文本提取 | 32/32 |
-| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 39 条（含 新卦优先、后/之后 并列、未预设形态变体）、**方法问法 HOW_TO 反例**、词界反例、方案 A 安全网）、引用校验、上下文装配、注入边界 | **92/92** |
+| `npm --prefix app run check:orchestration` | 意图判定（起卦动作矩阵 39 条 + **当前盘追问矩阵 16 条（有盘/无盘）**、方法问法 HOW_TO 反例、词界反例、方案 A 安全网）、引用校验、上下文装配、注入边界 | **108/108** |
 | `npm --prefix app run check:migration-phase4` | 旧库副本迁移、幂等、快照读写、历史一致 | 30/30 |
-| `npm --prefix app run check:e2e` | 四条主流程 + 19 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + **方法问法（怎么弄/怎么断卦）不作本地澄清** + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **65/65** |
+| `npm --prefix app run check:e2e` | 四条主流程 + 19 条起卦/混合问法澄清（无盘、无候选、无上游）+ 知识问法不作本地澄清 + **方法问法不作本地澄清 + 当前盘追问沿用旧盘（消息级）** + 候选/最终引用分离 + 历史旧摘录与哈希 + 模型透传 | **66/66** |
 | `npm --prefix app run check:qwen` | 千问适配器与可选模型清单（本地模拟上游，含 403 额度误报回归） | 22/22 |
 | `npm --prefix app run check:vendor` | 排盘副本与原模块逐字节一致 | 11/11 |
 | `node --import ./scripts/lib/register-ts.mjs scripts/check-provider-live.mjs [--chat]` | **真实上游连通性**：`/models` 可达与模型名校验；`--chat` 时发最小真实对话 | 见第 10 节 |
@@ -256,6 +256,19 @@
 | 帮我起卦，怎么排 | **chart** + 缺项追问 |
 
 **实测**：**先重建再验** → `check:all --with-http --with-ui` 退出码 0、**11/11**；`check:orchestration` **92/92**、`check:e2e` **65/65**、浏览器级 **2/2**。
+## 9.14 针对复验（`83be120`）P1 的修复（2026-10-08）
+
+**问题**：上一轮给旧盘追问分支多加 `!isHowToQuestion`，导致"这卦怎么看 / 这个卦怎么解读 / 这盘如何分析"等**指向当前盘的追问**被当通用方法问法，不复用旧盘、不发 `follow_up` 事件，无盘时也不提示补盘。
+
+**修复**：旧盘追问分支移除 `!isHowToQuestion`（只需"指向当前盘 + 无新起卦请求 + 无完整新输入"）；`isHowToQuestion` 仍只抑制**起卦请求**路径，一般方法问法照常回答。
+
+| 输入 | 有盘 | 无盘 |
+| --- | --- | --- |
+| 这卦怎么看 / 这个卦怎么解读 / 这盘如何分析 / 这卦怎么看事业 / 这卦怎么断 / 那这卦的应期如何判断 / 这盘如何解读工作 / 刚才那卦怎么理解 | `chart_follow_up`/`follow_up` 绑定旧盘 | `chart_follow_up` + 缺 `chart`（提示补盘） |
+| 起卦后该怎么断卦 / 如何学会断卦 | 正常作答（方法问法） | 正常作答 |
+| 帮我起卦，怎么排 | chart + 本地缺项追问 | chart + 本地缺项追问 |
+
+**实测**：**先重建再验** → `check:all --with-http --with-ui` 退出码 0、**11/11**；`check:orchestration` **108/108**、`check:e2e` **66/66**、浏览器级 **2/2**。
 ## 10. 真实上游联调记录（2026-10-07）
 
 环境：`app/.env.local` 配置 `DEEPSEEK_API_KEY`（DeepSeek 官方 `api.deepseek.com`）与 `QWEN_API_KEY`（阿里云百炼官方兼容模式 `dashscope.aliyuncs.com/compatible-mode/v1`）；所有联调**在正式库副本上**进行，正式 `storage/liuyao.db` 未被改动。

@@ -178,6 +178,15 @@ console.log('\n=== 4) 旧卦追问（沿用快照，不重算） ===');
   check('未产生新盘（chart_runs 行数不变）', before === after, `${before} → ${after}`);
   check('done 仍绑定同一快照', done?.data?.chartRunId === chartRunId, '');
   check('追问仍调用模型（有 delta）', names.includes('delta'), names.join(' → '));
+
+  // 复验 83be120 P1："这卦 + 怎么看/怎么解读" 也应沿用旧盘（消息级）
+  const followUpHowTo = await send('这卦怎么看');
+  const fChart = followUpHowTo.events.find((item) => item.event === 'chart');
+  check(
+    '"这卦怎么看"沿用旧盘（follow_up 同一 id，消息级）',
+    fChart?.data?.action === 'follow_up' && fChart?.data?.chartRunId === chartRunId,
+    `${fChart?.data?.action} ${String(fChart?.data?.chartRunId).slice(0, 8)}…`,
+  );
 }
 
 console.log('\n=== 5) 缺项只追问（不调用模型） ===');

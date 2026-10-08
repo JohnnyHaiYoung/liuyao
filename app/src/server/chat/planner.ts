@@ -208,7 +208,7 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
 
   // 3) 是否沿用旧盘：明确追问旧盘、没有新起卦请求、且没有给出新的一组完整输入
   const hasCompleteInput = Boolean(merged.lineValues) && Boolean(merged.mode === 'manual_calendar' ? merged.dayGanzhi && merged.monthBranch : merged.castAt && merged.timezone);
-  if (wantsFollowUp && !wantsNewChart && !hasCompleteInput && !hasCastRequest && !isHowToQuestion) {
+  if (wantsFollowUp && !wantsNewChart && !hasCompleteInput && !hasCastRequest) {
     const followUpChartRunId = params.currentChartRunId ?? null;
     const missingInputs: string[] = followUpChartRunId ? [] : ['chart'];
     reasons.push(
