@@ -238,23 +238,24 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
       `model=${last?.model} chart=${names.includes('chart')} 索取排盘输入=${text.includes('需要补充以下信息')}`,
     );
   }
-  // 知识形问法（含起卦词但在问"步骤/区别"）：应由模型正常作答，且**不**附加缺项澄清（避免噪音）
+  // 方案 1（彻底版）②：含起卦动作短语的方法问法 → 模型照答，且回答开头必附缺项提示（消息级）
   {
     const { events, names } = await send('请问起一卦的步骤是什么');
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
     const page = listMessages(db, conversationId, { limit: 50 });
     const last = page.items.at(-1);
     check(
-      '知识形问法由模型作答、不追加缺项提示（消息级）',
+      '含起卦动作的方法问法：模型作答 + 必附缺项提示（消息级）',
       last?.model !== 'local-clarification' &&
         names.includes('delta') &&
-        !text.includes('服务端提示') &&
+        text.includes('服务端提示') &&
+        text.includes('六次爻值') &&
         !names.includes('chart'),
       `model=${last?.model} 含提示=${text.includes('服务端提示')}`,
     );
     const { events: controlEvents } = await send('什么是用神？');
     const controlText = controlEvents.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
-    check('对照：纯知识问题不附缺项澄清（避免噪音）', !controlText.includes('服务端提示'), `长度 ${controlText.length}`);
+    check('对照：无起卦动作的纯知识问题不附缺项澄清（避免噪音）', !controlText.includes('服务端提示'), `长度 ${controlText.length}`);
   }
 
   // 歧义问法：只问一句"学习方法还是现在起卦"，且不索取排盘输入

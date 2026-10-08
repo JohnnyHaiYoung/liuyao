@@ -174,24 +174,27 @@ console.log('=== 1) 意图判定与计划对象 ===');
       !taughtReply.includes('需要补充以下信息'),
     `${taught.plan.intent}/${taught.plan.clarificationKind}`,
   );
-  // 方案 A 的安全网：附加澄清文本可用（触发条件由"命令式子句"判定；知识形问法不再附加，避免噪音）
-  check(
-    '保证追问文本可用（安全网，单元级）',
-    (() => {
-      const hint = buildAppendedClarification({ appendedClarification: 'missing_inputs' });
-      return typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区');
-    })(),
-    'buildAppendedClarification',
-  );
-  for (const knowledgeShaped of ['请问起一卦的步骤是什么', '算一卦和排一卦有什么区别？']) {
-    const result = plan(knowledgeShaped);
+  // 方案 1（彻底版）②：含起卦动作短语的知识/方法问法 → 方法照答、且必附缺项提示（不再二选一）
+  const castMethodSamples = [
+    '请问起一卦的步骤是什么',
+    '算一卦和排一卦有什么区别？',
+    '我想了解六爻起卦的方法',
+    '请介绍一下如何用六爻起卦',
+    '帮我解释六爻起卦的步骤',
+    '如果要算一卦该怎么操作',
+    '起卦后该怎么断卦',
+  ];
+  for (const castMethod of castMethodSamples) {
+    const result = plan(castMethod);
+    const local = buildMissingInputReply(result.plan);
+    const hint = buildAppendedClarification(result.plan);
     check(
-      `知识形问法「${knowledgeShaped}」不追问、不附加澄清（避免噪音）`,
-      buildMissingInputReply(result.plan) === null && buildAppendedClarification(result.plan) === null,
-      `${result.plan.intent}`,
+      `含起卦动作短语的方法问法「${castMethod}」必附缺项提示（方法照答）`,
+      result.plan.intent !== 'chart' && local === null && typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区'),
+      `${result.plan.intent} local=${local === null ? '无' : '有'} hint=${hint === null ? '无' : '有'}`,
     );
   }
-  for (const pure of ['我想了解六爻起卦的方法', '请介绍一下如何用六爻起卦', '帮我解释六爻起卦的步骤', '什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作', '如果要算一卦该怎么操作', '起卦后该怎么断卦', '如何学会断卦']) {
+  for (const pure of ['什么是用神？', '今天天气怎么样？', '六爻起卦怎么弄', '占卜怎么弄', '起个卦怎么操作', '如何学会断卦']) {
     const result = plan(pure);
     check(
       `纯知识/无关问题「${pure}」不附缺项澄清（避免噪音）`,
