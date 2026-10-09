@@ -18,6 +18,8 @@
 
 **第三阶段**的本地排盘与**第四阶段**的聊天融合已签收。第五阶段要求把应用与首批资料组成可离线迁移的 Docker 包，并在隔离环境和目标服务器分别核验数据持久化、HTTPS/SSE、备份恢复与升级回滚；详见[第五阶段研发任务书](docs/phase5_development_spec.md)。
 
+更多本地资料的录入已作为[Wiki 扩充第一批](docs/wiki_expansion_batch1_spec.md)与 Docker 发布并行启动；新增来源通过独立验收后再进入正式发布版本。
+
 - [产品需求](docs/product_requirements.md)
 - [技术架构](docs/technical_architecture.md)
 - [研发计划与阶段验收](docs/development_plan.md)
@@ -32,6 +34,8 @@
 - [第四阶段独立最终验收](docs/phase4_final_acceptance_d6c5148_2026-10-09.md)
 - [第五阶段研发任务书](docs/phase5_development_spec.md)
 - [第五阶段开发 AI 提示词](docs/phase5_developer_prompt.md)
+- [Wiki 扩充第一批研发任务书](docs/wiki_expansion_batch1_spec.md)
+- [Wiki 扩充第一批开发 AI 提示词](docs/wiki_expansion_batch1_developer_prompt.md)
 - [首版验收清单](docs/acceptance_checklist.md)
 - [开发 AI 交接说明](docs/developer_handoff.md)
 - [Agent 设计草案（早期）](docs/agent_design_v0.md)
