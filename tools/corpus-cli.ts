@@ -1286,7 +1286,12 @@ function commandVerify(): void {
     const needle = sample.replace(/\s/g, '').slice(0, 10);
     const raw = fs.readFileSync(fromProjectRelative(source.originalRelativePath));
     let carrier = '';
-    if (source.format === 'txt') carrier = new TextDecoder('gb18030', { fatal: false }).decode(raw);
+    if (source.format === 'txt') {
+      const enc = source.processing.inputEncoding === 'gb18030' || source.processing.inputEncoding === 'big5'
+        ? source.processing.inputEncoding
+        : 'utf-8';
+      carrier = new TextDecoder(enc, { fatal: false }).decode(raw);
+    }
     else if (source.format === 'doc') carrier = new TextDecoder('utf-16le', { fatal: false }).decode(raw);
     else {
       const documentEntry = readZip(raw).find((entry) => entry.name === 'word/document.xml');

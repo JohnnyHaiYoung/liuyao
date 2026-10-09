@@ -2,10 +2,10 @@
   "catalogVersion": "wiki-catalog.v1",
   "generatedFrom": {
     "indexPath": "wiki/index.md",
-    "indexSha256": "950857ef375800359ab5c86f0556e23e826a208b086fcd038deaf03d843be832",
+    "indexSha256": "ed69b2f9befa2e183f30e0bd2a5636a51d28d1043025e45af00e574eb2166ced",
     "note": "由 app/scripts/build-wiki-catalog.mjs 生成；不写入时间戳以保证 --check 可做漂移检测"
   },
-  "pageCount": 14,
+  "pageCount": 16,
   "pages": [
     {
       "pageId": "comparison:meihua-vs-liuyao",
@@ -28,11 +28,67 @@
         "src-25fcddea758b",
         "src-f3f838d501b1"
       ],
-      "qualityStatus": "usable",
-      "qualityRank": 0,
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
       "applicableQuestions": [],
       "bytes": 3178,
       "sha256": "07c8dd523ecc420ae6471c9f6ff429c28aab0e409c93c4ecf59d70202830d84d"
+    },
+    {
+      "pageId": "concept:duangua-jifa",
+      "path": "wiki/concepts/duangua-jifa.md",
+      "kind": "concept",
+      "title": "断卦技法（基础口诀与实例）",
+      "displayName": "断卦技法",
+      "topics": [
+        "一、基础断法口诀（十看）",
+        "二、各条的来源主张（并列）",
+        "三、断卦实例（求财/求官/婚姻/兼断）",
+        "未核实与争议"
+      ],
+      "aliases": [
+        "怎么看空冲刑合",
+        "断卦口诀",
+        "断卦怎么断",
+        "断卦技法",
+        "断卦技法口诀"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-fd45fbed3007"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 3258,
+      "sha256": "527867b605558fc70492e6c2037ebfe593dbcf713d8c552571eaea0a100f76a5"
+    },
+    {
+      "pageId": "concept:liushen-liuqin",
+      "path": "wiki/concepts/liushen-liuqin.md",
+      "kind": "concept",
+      "title": "六神临六亲取象",
+      "displayName": "六神临六亲取象",
+      "topics": [
+        "各六神临六亲的取象（并列，不合并为统一规则）",
+        "未核实与争议"
+      ],
+      "aliases": [
+        "六神临六亲",
+        "六神临六亲取象",
+        "六神取象",
+        "六神是什么",
+        "青龙朱雀勾陈螣蛇白虎玄武"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-777319b69476"
+      ],
+      "qualityStatus": "usable",
+      "qualityRank": 0,
+      "applicableQuestions": [],
+      "bytes": 2412,
+      "sha256": "f0bbfdc8a003e3b4b277be8d22fb8eec13abaed8176db2854809b0553f8fc09c"
     },
     {
       "pageId": "concept:yongshen",
@@ -44,6 +100,7 @@
         "一、按六亲取用神的基本条目",
         "二、用神随「问题目标/意念」变化",
         "三、用神选取的更深一层主张（同一来源内部的层次差异）",
+        "三·补｜按问题类型分项取用神（新增来源，并列不合并）",
         "四、未核实与争议",
         "待补充"
       ],
@@ -57,6 +114,7 @@
       "sourceIds": [
         "src-08862b06aea9",
         "src-25fcddea758b",
+        "src-31cafa8c2634",
         "src-3f8243c07930",
         "src-e6fc8612e955",
         "src-f3f838d501b1"
@@ -64,8 +122,8 @@
       "qualityStatus": "needs_review",
       "qualityRank": 1,
       "applicableQuestions": [],
-      "bytes": 4202,
-      "sha256": "73e4903a9d2bf8c3a4cd3ed2d2cf92cd2421c12d7e95418057c9e1802be9fae8"
+      "bytes": 6207,
+      "sha256": "273b6bdf141ff2411cba7efd8f1f14c3cc48a050ae5113028f2a5fc0f14b7271"
     },
     {
       "pageId": "log:log",
@@ -314,8 +372,8 @@
         "src-25fcddea758b",
         "src-f3f838d501b1"
       ],
-      "qualityStatus": "usable",
-      "qualityRank": 0,
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
       "applicableQuestions": [],
       "bytes": 4130,
       "sha256": "7fe0bf75fa513a1971da8e1cc252f8ccafe6bac9c2171be839e37fd0c4482458"

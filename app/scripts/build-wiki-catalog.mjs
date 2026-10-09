@@ -28,6 +28,8 @@ const read = (file) => fs.readFileSync(file, 'utf8');
 /** 别名/主题补充：仅用于模型与用户都常见的说法，手工登记，避免自动猜测。 */
 const ALIAS_SEED = {
   'concepts/yongshen.md': { aliases: ['取用神', '用神是什么', '用神怎么取', '如何取用神'], kind: 'concept' },
+  'concepts/liushen-liuqin.md': { aliases: ['六神临六亲', '六神取象', '六神临六亲取象', '青龙朱雀勾陈螣蛇白虎玄武', '六神是什么'], kind: 'concept' },
+  'concepts/duangua-jifa.md': { aliases: ['断卦技法', '断卦口诀', '怎么看空冲刑合', '断卦怎么断', '断卦技法口诀'], kind: 'concept' },
   'comparisons/meihua-vs-liuyao.md': { aliases: ['梅花易数和六爻的区别', '梅花起卦与六爻断卦'], kind: 'comparison' },
   'schema.md': { aliases: ['Wiki 编写规则'], kind: 'schema' },
   'log.md': { aliases: ['维护记录'], kind: 'log' },

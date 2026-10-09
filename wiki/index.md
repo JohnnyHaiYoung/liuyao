@@ -7,7 +7,7 @@
 - [Wiki 编写规则](schema.md)：条目类型、出处、状态和冲突的记录方式。
 - [资料处理目录](../corpus/README.md)：原件、提取文本、清洗文本、图片与质量报告的位置。
 - [资料清单（manifest）](../corpus/manifest.jsonl)：每份来源的哈希、处理方式与覆盖范围（机器可读）。
-- 概念页：[取用神](concepts/yongshen.md)（4 个来源的正文证据）。
+- 概念页：[取用神](concepts/yongshen.md)（5 个来源的正文证据，并列不合并）、[六神临六亲取象](concepts/liushen-liuqin.md)（单一来源取象词典）、[断卦技法](concepts/duangua-jifa.md)（基础口诀与实例，卦例 `needs_review`）。
 - 对照页：[梅花易数起卦与六爻断卦的边界](comparisons/meihua-vs-liuyao.md)（真实分歧，并列不裁决）。
 - [维护记录](log.md)：每次编入或修订的记录。
 
@@ -20,12 +20,11 @@
 | [src-3f8243c07930](sources/src-3f8243c07930.md) | 旧 DOC | 全文（285 段） | `usable` | 自实现 OLE2 解析；含线上排盘残留 |
 | [src-946795472cd6](sources/src-946795472cd6.md) | DOCX | 全文（122 段） | `usable` | 文件内无图片、无表格 |
 | [src-e6fc8612e955](sources/src-e6fc8612e955.md) | 文字层 PDF | 整本 23 页 | `needs_review` | 文字层为 OCR 产物且 20/23 页含 `██` 爻位占位；已附**全部 23 页**原页图并在页内标注，卦例不作默认规则 |
-| [src-f3f838d501b1](sources/src-f3f838d501b1.md) | 扫描 PDF（OCR） | 第 1–5 页（整本） | 
-eeds_review | Windows 内建离线 OCR；未逐字校对；已附 5 页原页图 |
-| [src-31cafa8c2634](sources/src-31cafa8c2634.md) | TXT | 全文（1 段） | usable | 无署名；取用神「诀窍」式转述，不可当古籍原文 |
-| [src-777319b69476](sources/src-777319b69476.md) | TXT | 全文（9 段） | usable | 转载无作者；六神临六亲取象词典式转述 |
-| [src-fd45fbed3007](sources/src-fd45fbed3007.md) | TXT | 全文（28 段） | usable（卦例 needs_review） | 署名「林潮」；近名 ..txt 版本已比对不合并 |
-| [src-a76b03f471fe](sources/src-a76b03f471fe.md) | TXT | 全文已提取（383 段）；仅编入章节目录 | usable | 「曲炜」讲义转载；梅花易断/六爻占断分轨 |
+| [src-f3f838d501b1](sources/src-f3f838d501b1.md) | 扫描 PDF（OCR） | 第 1–5 页（整本） | `needs_review` | Windows 内建离线 OCR；未逐字校对；已附 5 页原页图 |
+| [src-31cafa8c2634](sources/src-31cafa8c2634.md) | TXT | 全文（1 段） | `usable` | 无署名；取用神「诀窍」式转述，不可当古籍原文 |
+| [src-777319b69476](sources/src-777319b69476.md) | TXT | 全文（9 段） | `usable` | 转载无作者；六神临六亲取象词典式转述 |
+| [src-fd45fbed3007](sources/src-fd45fbed3007.md) | TXT | 全文（28 段） | `usable` | 署名「林潮」；卦例段录入错字多、按 `needs_review`；近名 ..txt 已比对不合并 |
+| [src-a76b03f471fe](sources/src-a76b03f471fe.md) | TXT | 全文已提取（383 段）；仅编入章节目录 | `usable` | 「曲炜」讲义转载；梅花易断/六爻占断分轨 |
 
 ## 当前覆盖与边界
 
