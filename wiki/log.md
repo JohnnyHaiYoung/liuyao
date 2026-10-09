@@ -33,3 +33,12 @@
 - 扫描 PDF 使用 Windows 内建 PDF 渲染 + Windows.Media.Ocr（zh-Hans-CN，离线，未调用任何云 OCR）。
 - 文字层 PDF 使用自实现的 PDF 对象/内容流/ToUnicode 解析；发现该文字层是 OCR 产物，已在其来源页记录形近字风险。
 - 全部来源的处理方式、覆盖范围、未处理范围与工具版本见 [corpus/manifest.jsonl](../corpus/manifest.jsonl) 与 [corpus/reports/](../corpus/reports/)。
+
+## 2026-10-09 ingest | 第一批扩充（4 份来源）
+
+只读导入并清洗 4 份 F 盘 TXT（取用神诀窍 / 六神临六亲取象 / 六爻断卦技法 / 六爻特训班讲义 曲炜1），重新核对 SHA-256 与盘点值一致。F 盘原件未修改；corpus/originals 不入 Git，进入私有交付包。
+
+- 新增来源页：[src-31cafa8c2634](sources/src-31cafa8c2634.md)、[src-777319b69476](sources/src-777319b69476.md)、[src-fd45fbed3007](sources/src-fd45fbed3007.md)、[src-a76b03f471fe](sources/src-a76b03f471fe.md)。
+- 近名比对：六爻断卦技法.txt（fd45fbed…）与 ..txt（69b580d5…）非逐字同一，仅记疑似版本关系，不合并。
+- 讲义仅编入章节目录；正文规则未逐段核对，梅花易断/六爻占断分轨。
+- 概念/对照页扩写、目录问答（收录范围四层）与完整质量报告见后续提交。
