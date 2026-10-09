@@ -1,0 +1,36 @@
+{
+  "version": "2026-10-09",
+  "sourceRoot": "F:\\道教\\六爻",
+  "note": "本地 Wiki 扩充第一批。path 为相对 F:\\道教\\六爻 的路径；role 仅表示本批用途，不代表对内容、作者或质量的认定。选择与比对见 docs/wiki_expansion_batch1_design.md。",
+  "samples": [
+    {
+      "role": "TXT-QUYONGSHEN",
+      "path": "五行所属行业\\六爻取用神诀窍.txt",
+      "format": "txt",
+      "expectedEncoding": "gb18030",
+      "purpose": "与已建「取用神」概念页并列比较；核对作者、转引与适用前提，不合并为通用规则"
+    },
+    {
+      "role": "TXT-LIUSHEN",
+      "path": "五行所属行业\\六神临六亲取象.txt",
+      "format": "txt",
+      "expectedEncoding": "gb18030",
+      "purpose": "建立六神/六亲术语与取象来源页；区分原文举例、断语与可计算盘面字段"
+    },
+    {
+      "role": "TXT-DUANGUA-JIFA",
+      "path": "六爻断卦技法.txt",
+      "format": "txt",
+      "expectedEncoding": "gb18030",
+      "purpose": "规则/案例候选；先与近名 六爻断卦技法..txt 对比版本与正文，不凭文件名合并"
+    },
+    {
+      "role": "TXT-TEXUNBAN-QUWEI1",
+      "path": "六爻特训班讲义 曲炜1 .txt",
+      "format": "txt",
+      "expectedEncoding": "utf-8-sig",
+      "purpose": "较长讲义，先做全文可定位提取与章节目录；先核对并编入明确标注范围的章节，梅花与六爻方法分轨，网页导航/转载信息单列"
+    }
+  ],
+  "deferred": []
+}
