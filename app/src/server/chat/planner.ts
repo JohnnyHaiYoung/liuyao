@@ -8,6 +8,7 @@
  */
 import { selectWikiEvidence, type SelectResult } from '../wiki/select.ts';
 import type { WikiCatalog } from '../wiki/catalog.ts';
+import { describeWikiCoverage, findCoverageFiles } from '../wiki/coverage.ts';
 import { createChartRun, extractChartInputFromText, type ChartInput, type ChartRunResult } from '../chart/service.ts';
 
 export type Intent = 'general' | 'concept' | 'source_comparison' | 'chart' | 'chart_follow_up';
@@ -30,7 +31,12 @@ export interface PlanObject {
    * 本地澄清的种类（复验报告 8dd1c09）：`missing_inputs` = 缺排盘输入；
    * `learn_or_cast` = "请教我用六爻起卦"这类既可理解为学习方法、也可理解为现在起卦的歧义问法。
    */
-  clarificationKind?: 'missing_inputs' | 'learn_or_cast';
+  clarificationKind?: 'missing_inputs' | 'learn_or_cast' | 'coverage';
+  /**
+   * 收录范围问答（wiki_expansion_batch1 §4）：`coverage` 澄清时由程序生成的四层清单文本，
+   * 不经模型，避免从本轮 S1/S2 反推全库总数。
+   */
+  coverageReply?: string;
   /**
    * 方案 A「保证追问」：判定没把这句话当成起卦、但句中确实像在要求起卦且输入不全时，
    * 由服务端在模型回答**开头**附一句缺项澄清。这样任何措辞都无法"静默跳过追问"。
@@ -171,6 +177,36 @@ export function isCastRequestClause(clause: string): boolean {
   );
 }
 
+// ---- 收录范围问答（wiki_expansion_batch1 §4） ----
+const COVERAGE_SUMMARY_RE = /录入了哪些|有哪些资料|有多少本|收录了多少|收录范围|资料清单|有哪些来源|几本书|哪些书|什么资料|录了哪些|收录了哪些|收录了些什么/;
+const COVERAGE_FILE_RE = /有没有|是否收录|收录了吗|包含|查一下|有这本书|有这本书吗|收录了/;
+
+function coverageFileQueryOf(question: string): string {
+  return question
+    .replace(/有没有|是否收录|收录了吗|包含|查一下|这本书|那本书|这本|那本|了吗|呢|吗|收录了|？|\?|\s/g, '')
+    .trim();
+}
+
+function buildCoverageSummaryReply(coverage: ReturnType<typeof describeWikiCoverage>): string {
+  const lines = [
+    '按当前本地 Wiki 清单（由程序从 manifest 与目录生成，非模型估计）：',
+    '',
+    `- 已导入原件：${coverage.counts.imported} 份（含源文件与哈希登记，不等于已提取或已编入）`,
+    `- 已提取/清洗：${coverage.counts.processed} 份（有可定位文本，不等于已成 Wiki 规则）`,
+    `- 已编入 Wiki：${coverage.counts.wikiIndexed} 份来源（来源页/概念页中有可定位主张）`,
+    '',
+    '明细（来源 ID｜文件名｜格式｜质量｜提取｜编入）：',
+    ...coverage.files.map(
+      (f) => `- ${f.sourceId} ${f.relativePathFromF}｜${f.format}｜${f.quality}｜提取=${f.processed ? '是' : '否'}｜编入=${f.wikiIndexed ? '是' : '否'}`,
+    ),
+    '',
+    '说明：本轮实际引用的来源以回答中标注的编号为准，不代表全库总数。',
+    '',
+    '最终结果：以上为程序生成的收录范围清单。',
+  ];
+  return lines.join('\n');
+}
+
 export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const question = String(params.question ?? '');
   const reasons: string[] = [];
@@ -178,6 +214,45 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 1) 服务端选页（永远执行；无命中就是无命中，不伪造来源）
   const wiki = selectWikiEvidence(params.projectRoot, params.catalog, question);
   for (const page of wiki.selectedPages) reasons.push(`选中 ${page.path}（${page.reason}）`);
+
+  // 1.5) 收录范围问答：确定性本地回答（数据只来自 manifest + catalog），不让模型从本轮 S 反推全库
+  const isCoverageSummary = COVERAGE_SUMMARY_RE.test(question);
+  const coverageFileQuery = !isCoverageSummary && COVERAGE_FILE_RE.test(question) ? coverageFileQueryOf(question) : null;
+  if (coverageFileQuery !== null || isCoverageSummary) {
+    const coverage = describeWikiCoverage(params.projectRoot);
+    let coverageReply: string;
+    if (coverageFileQuery !== null) {
+      const hits = findCoverageFiles(params.projectRoot, coverageFileQuery);
+      coverageReply =
+        hits.length === 0
+          ? `本地 Wiki 尚未登记或尚未编入「${coverageFileQuery}」。当前已编入的来源共 ${coverage.counts.wikiIndexed} 份（以目录清单为准），我不会编造"已读过"。\n\n最终结果：未找到该资料。`
+          : `本地 Wiki 已登记以下与「${coverageFileQuery}」相关的来源：\n${hits
+              .map((h) => `- ${h.sourceId} ${h.relativePathFromF}｜${h.format}｜${h.quality}｜提取=${h.processed ? '是' : '否'}｜编入=${h.wikiIndexed ? '是' : '否'}`)
+              .join('\n')}\n\n最终结果：以上为程序生成的匹配结果。`;
+    } else {
+      coverageReply = buildCoverageSummaryReply(coverage);
+    }
+    reasons.push('识别为收录范围问答，由程序从 manifest + catalog 生成清单');
+    return {
+      plan: {
+        intent: 'general',
+        chartAction: 'none',
+        selectedPageIds: wiki.selectedPages.map((page) => page.pageId),
+        selectedSids: wiki.snippets.filter((snippet) => snippet.citable).map((snippet) => snippet.sid),
+        missingInputs: [],
+        reasons,
+        ambiguities: [],
+        budgetExceeded: wiki.budgetExceeded,
+        promptVersion: params.promptVersion,
+        followUpChartRunId: null,
+        chartError: null,
+        clarificationKind: 'coverage',
+        coverageReply,
+      },
+      wiki,
+      chart: null,
+    };
+  }
 
   // 2) 排盘输入：显式结构化输入优先，其次从文本保守提取
   const extraction = extractChartInputFromText(question);
@@ -373,6 +448,8 @@ export function buildAppendedClarification(plan: PlanObject): string | null {
 
 /** 缺项追问文本由本地逻辑生成（不经模型），保证措辞不会被上游改写。 */
 export function buildMissingInputReply(plan: PlanObject): string | null {
+  // 收录范围问答：程序生成的确定性清单，不经模型
+  if (plan.clarificationKind === 'coverage' && plan.coverageReply) return plan.coverageReply;
   // 歧义问法（"请教我用六爻起卦"）：只问一句"学习方法还是现在起卦"，**不**索取排盘输入
   if (plan.clarificationKind === 'learn_or_cast') {
     return [

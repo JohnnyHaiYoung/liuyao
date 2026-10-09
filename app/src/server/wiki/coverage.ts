@@ -1,4 +1,4 @@
-import { loadCatalog, loadSourceManifest } from './catalog';
+import { loadCatalog, loadSourceManifest } from './catalog.ts';
 
 /**
  * 收录范围问答（任务书 §4）：数据只来自 `corpus/manifest.jsonl` 与 `wiki/catalog.json` 的**已核验字段**，
