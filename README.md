@@ -2,11 +2,11 @@
 
 目标：构建可整体打包部署到服务器的个人六爻 Agent 网站，采用 Node.js/TypeScript，接入可配置的第三方 LLM API，以项目内的 LLM Wiki 和排盘工具支持自由聊天、历史记录、概念问答、资料比较及具体卦例分析。默认简明分析，依据按需展开，最终结果放在回答末尾。
 
-当前处于需求、架构与资料试点阶段。产品/架构方只负责研发文档和后续验收；具体开发由用户指定的其他 AI 完成。项目已有资料目录和部署约定；**小样本资料库与可追溯 Wiki 已建立**，尚未批量导入全部资料、未接入 Wiki 阅读器、未安装外部 Skill、未实现排盘程序。
+当前阶段 1–4 已通过独立验收，正在制定和实施阶段 5 的 Linux Docker 发布与部署。产品/架构方负责需求文档和独立验收；具体开发由用户指定的其他 AI 完成。首批六份资料与可追溯 Wiki 已接入聊天，本地确定性排盘也已接入；其余资料尚未批量导入。第四阶段签收依据见[最终验收报告](docs/phase4_final_acceptance_d6c5148_2026-10-09.md)。
 
 **第一阶段（可持久保存的自由聊天网站）已实现**：`app/` 下为 Node.js/TypeScript + Next.js 的可运行站点，
 包含单用户登录、自由聊天、DeepSeek Flash 流式回复、停止生成、历史会话与标题重命名、SQLite 持久化与备份脚本。
-当前仅接入 DeepSeek，**Wiki 阅读与排盘尚未接入**，页面与回答不会声称已读资料或已算出卦盘。
+第四阶段在此基础上加入 Wiki 目录阅读、来源与盘面快照、排盘服务端适配以及可选千问模型。发布包和目标服务器尚未通过第五阶段验收。
 启动步骤、接口与 SSE 示例、备份恢复、验收实测记录见 [第一阶段交付说明](docs/phase1_delivery.md)。
 
 **第二阶段（小样本资料库与可追溯 Wiki）已实现**：`corpus/` 下为 6 份不同哈希的样本
@@ -15,6 +15,8 @@
 （零 npm 依赖；旧 DOC 与 PDF 使用自实现解析器，扫描件使用 Windows 内建离线 OCR）。
 `wiki/` 下新增 6 个来源页、更新「取用神」概念页并新增「梅花易数起卦与六爻断卦的边界」对照页，每条主张都可按
 来源 ID 与段落锚点回到包内原件。实测证据与未完成项见 [第二阶段交付说明](docs/phase2_delivery.md)。
+
+**第三阶段**的本地排盘与**第四阶段**的聊天融合已签收。第五阶段要求把应用与首批资料组成可离线迁移的 Docker 包，并在隔离环境和目标服务器分别核验数据持久化、HTTPS/SSE、备份恢复与升级回滚；详见[第五阶段研发任务书](docs/phase5_development_spec.md)。
 
 - [产品需求](docs/product_requirements.md)
 - [技术架构](docs/technical_architecture.md)
@@ -26,6 +28,10 @@
 - [第一阶段开发 AI 提示词](docs/phase1_developer_prompt.md)
 - [第二阶段研发任务书（范围、来源契约、质量门槛、验收场景）](docs/phase2_development_spec.md)
 - [第二阶段交付说明（样本清单、追溯链、工具限制、验收证据）](docs/phase2_delivery.md)
+- [第三阶段最终验收](docs/phase3_final_acceptance_a27e672_2026-10-05.md)
+- [第四阶段独立最终验收](docs/phase4_final_acceptance_d6c5148_2026-10-09.md)
+- [第五阶段研发任务书](docs/phase5_development_spec.md)
+- [第五阶段开发 AI 提示词](docs/phase5_developer_prompt.md)
 - [首版验收清单](docs/acceptance_checklist.md)
 - [开发 AI 交接说明](docs/developer_handoff.md)
 - [Agent 设计草案（早期）](docs/agent_design_v0.md)
