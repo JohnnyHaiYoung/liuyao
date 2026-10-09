@@ -174,7 +174,7 @@ console.log('=== 1) 意图判定与计划对象 ===');
       !taughtReply.includes('需要补充以下信息'),
     `${taught.plan.intent}/${taught.plan.clarificationKind}`,
   );
-  // 方案 1（彻底版）②：含起卦动作短语的知识/方法问法 → 方法照答、且必附缺项提示（不再二选一）
+  // 2026-10-09 用户决策：纯方法问法只回答方法，不由服务端索取爻值/时间/时区
   const castMethodSamples = [
     '请问起一卦的步骤是什么',
     '算一卦和排一卦有什么区别？',
@@ -189,8 +189,8 @@ console.log('=== 1) 意图判定与计划对象 ===');
     const local = buildMissingInputReply(result.plan);
     const hint = buildAppendedClarification(result.plan);
     check(
-      `含起卦动作短语的方法问法「${castMethod}」必附缺项提示（方法照答）`,
-      result.plan.intent !== 'chart' && local === null && typeof hint === 'string' && hint.includes('六次爻值') && hint.includes('时区'),
+      `纯方法问法「${castMethod}」不附缺项提示、不本地追问`,
+      result.plan.intent !== 'chart' && local === null && hint === null,
       `${result.plan.intent} local=${local === null ? '无' : '有'} hint=${hint === null ? '无' : '有'}`,
     );
   }

@@ -238,20 +238,20 @@ console.log('\n=== 5) 缺项只追问（不调用模型） ===');
       `model=${last?.model} chart=${names.includes('chart')} 索取排盘输入=${text.includes('需要补充以下信息')}`,
     );
   }
-  // 方案 1（彻底版）②：含起卦动作短语的方法问法 → 模型照答，且回答开头必附缺项提示（消息级）
+  // 2026-10-09 用户决策：纯方法问法只回答方法，不由服务端附缺项提示（消息级）
   {
     const { events, names } = await send('请问起一卦的步骤是什么');
     const text = events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
     const page = listMessages(db, conversationId, { limit: 50 });
     const last = page.items.at(-1);
     check(
-      '含起卦动作的方法问法：模型作答 + 必附缺项提示（消息级）',
+      '纯方法问法：模型作答、不附缺项提示、无 chart（消息级）',
       last?.model !== 'local-clarification' &&
         names.includes('delta') &&
-        text.includes('服务端提示') &&
-        text.includes('六次爻值') &&
+        !text.includes('服务端提示') &&
+        !text.includes('六次爻值') &&
         !names.includes('chart'),
-      `model=${last?.model} 含提示=${text.includes('服务端提示')}`,
+      `model=${last?.model} 含提示=${text.includes('服务端提示')} chart=${names.includes('chart')}`,
     );
     const { events: controlEvents } = await send('什么是用神？');
     const controlText = controlEvents.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');

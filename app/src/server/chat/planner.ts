@@ -323,15 +323,21 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const isConcept = pageIds.some((id) => id.startsWith('concept:'));
   const intent: Intent = chart && chart.ok ? 'chart' : chartAction === 'new' || missingInputs.length > 0 ? 'chart' : isComparison ? 'source_comparison' : isConcept ? 'concept' : 'general';
 
-  // 方案 1（彻底版）②：只要句中含起卦动作短语（hasCastAction）且未排盘、无完整输入，
-  // 就在回答开头附一句缺项提示——与方法问法**不再互斥**：方法照答、提示照给。
-  // 这样任何措辞都无法"静默跳过追问"，也不存在"只给输入清单不给方法"。
+  // 2026-10-09 用户决策：纯方法问法只回答方法，不由服务端索取爻值/时间/时区。
+  // 附加缺项提示只对"命令式且非方法问法"的边界兜底；方法问法一律不附提示。
+  const commandLike =
+    REQUEST_IMPERATIVE_PATTERN.test(question) ||
+    clauseList.some((clause) => {
+      const trimmed = clause.trim();
+      if (trimmed === '' || HOW_TO_PATTERN.test(trimmed)) return false;
+      return LEADING_IMPERATIVE_PATTERN.test(trimmed) || isCastRequestClause(trimmed);
+    });
   const appendedClarification =
-    hasCastAction && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0
+    commandLike && !hasHowToQuestion && !hasAnyChartInput && !(chart && chart.ok) && missingInputs.length === 0
       ? 'missing_inputs'
       : null;
   if (appendedClarification !== null) {
-    reasons.push('方案 1：句中出现起卦动作而输入不全，已在回答开头附缺项提示');
+    reasons.push('句中出现起卦动作且输入不全，已在回答开头附缺项提示');
   }
 
   return {
