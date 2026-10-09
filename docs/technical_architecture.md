@@ -93,14 +93,14 @@ WebSocket 在首版没有必要；当前交互是用户提交一条消息、服�
 
 | 仓库 | 处理决定 |
 | --- | --- |
-| [`fortune-liuyao-skill`](https://github.com/shubhaviatiningsih-byte/fortune-liuyao-skill/blob/main/scripts/liuyao_core.py) | 真正的 Skill 候选；Python 核心实现六爻值校验、本变卦、八宫世应、纳甲、六亲、六神、旬空等确定性盘面字段。作为独立排盘对照和规则来源候选；若生产直接调用，发布包须含 Python 运行时 |
-| [`liuyao-skills`](https://github.com/songgoldenwind-crypto/liuyao-skills/tree/main/liuyao-paipan-code) | 真正的 Skill 候选；有 JavaScript `buildLiuyaoDetail()` 排盘接口，可在提供日/月历法字段时生成盘面；从公历时间自动得农历、干支和节气的部分由 Node 调用 Python。优先评估其 JavaScript 核心在本项目的复用价值；历法模块单独选型与核对，保留两套 Skill 的方法边界和 MIT 许可 |
+| [`fortune-liuyao-skill`](https://github.com/shubhaviatiningsih-byte/fortune-liuyao-skill/blob/main/scripts/liuyao_core.py) | 已固定提交并审查；Python 核心用于开发期同输入对照，**不进生产运行链路**。许可和版本限制见阶段 3 上游报告 |
+| [`liuyao-skills`](https://github.com/songgoldenwind-crypto/liuyao-skills/tree/main/liuyao-paipan-code) | 已固定提交并审查；JavaScript 排盘核心用于开发期同输入对照，**未直接复制为本项目生产源码**。两套解读 Skill 的方法边界分别保留 |
 | [`woaichiji/liuyao`](https://github.com/woaichiji/liuyao) | 术语与主题参考，不是可执行 Skill；核对出处后才可编入 Wiki |
 | [`divination-liuyao`](https://github.com/SmallTeddyGames/divination-liuyao) | 网页交互参考，不是本项目的排盘 Skill；其现有技术和卦辞叙事方式不等同于纳甲六爻规则 |
 
-当前只做设计与评估，**尚未下载或执行这些仓库**。不能因有 Skill 文件就省略本项目的工具接口、权限边界和计算核对。
+阶段 3 已按固定提交审查前两个排盘仓库并用于开发期独立对照，审查结果见[上游报告](phase3_upstream_audit.md)；**生产排盘采用本项目的 `paipan/` Node 模块，不执行上游 Python，也没有把四个仓库一键安装到用户全局 Skill 目录**。阶段 3 的[最终验收](phase3_final_acceptance_a27e672_2026-10-05.md)只确认当前口径的可复算软件行为；阶段 4 已按[融合任务书](phase4_development_spec.md)接入聊天并[通过独立验收](phase4_final_acceptance_d6c5148_2026-10-09.md)。不能因有 Skill 文件就省略本项目的工具接口、权限边界和计算核对。
 
-这里的“算法”至少分为起卦与爻值换算、历法换算、确定性排盘、按规则生成候选证据，以及最终断事解释。前四类有可执行代码或可形式化规则；最终结论仍依赖方法选择与解释，不能把软件计算正确当成预测已被证实。开发方先以第二个仓库的 JavaScript 排盘核心为优先候选，再用第一个仓库做相同输入的独立对照；公历到干支/节气的 Node 实现须单独评估日界、时区和节气边界。若无法可靠满足首版需求，再提交需要 Python 辅助运行时的架构变更供复核。
+这里的“算法”至少分为起卦与爻值换算、历法换算、确定性排盘、按规则生成候选证据，以及最终断事解释。前四类有可执行代码或可形式化规则；最终结论仍依赖方法选择与解释，不能把软件计算正确当成预测已被证实。阶段 3 已选 `lunar-typescript@1.8.6` 作 Node 历法适配并标明日界、时区和节气口径；第四阶段只能调用已验收的确定性盘面，不能让模型重新计算或改写它。
 
 ## 6. 数据处理、权限与发布
 

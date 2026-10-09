@@ -1,6 +1,6 @@
 # 六爻 Agent 首版验收清单
 
-版本：2026-10-04。本文供开发方自查和完整产品验收使用。第一阶段网站的最新结论见 [复验记录](phase1_reacceptance_2026-10-02.md)，首次问题见 [首次验收记录](phase1_acceptance_2026-10-02.md)；第二阶段的最新结论见 [提交 39703ef 的二次复验记录](phase2_reacceptance_39703ef_2026-10-04.md)，前两轮问题见 [2026-10-04 复验记录](phase2_reacceptance_2026-10-04.md)和[2026-10-02 验收记录](phase2_acceptance_2026-10-02.md)。完整六爻 Agent 尚未验收。功能依据 [产品需求](product_requirements.md)，接口与数据约束依据 [技术架构](technical_architecture.md)。
+版本：2026-10-09。本文供开发方自查和完整产品验收使用。第一阶段网站的最新结论见[复验记录](phase1_reacceptance_2026-10-02.md)；第二阶段见[独立验收记录](phase2_reacceptance_18bcb3b_2026-10-04.md)；第三阶段见[最终验收记录](phase3_final_acceptance_a27e672_2026-10-05.md)；第四阶段的软件融合见[最终验收记录](phase4_final_acceptance_d6c5148_2026-10-09.md)。**目标服务器发布包与部署尚未验收，完整六爻 Agent 仍需第五阶段验收。**功能依据[产品需求](product_requirements.md)，接口与数据约束依据[技术架构](technical_architecture.md)。
 
 第一阶段的网站基础闭环另见 [第一阶段研发任务书](phase1_development_spec.md)；下面的部分条目要等后续 Wiki、排盘和发布阶段完成后才能验收。
 
