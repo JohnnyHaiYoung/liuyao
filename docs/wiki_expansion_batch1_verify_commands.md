@@ -1,6 +1,6 @@
 # 本地 Wiki 第一批 · 复验命令与预期（供独立验收方）
 
-- 交付基线：`wiki-batch1@ead9ad0b`（功能提交 `9102135`/`ead9ad0b`；自 `main@e5e8b31` 分叉，未合并 `main`）
+- 交付基线：`wiki-batch1`（自 `main@e5e8b31` 分叉，未合并 `main`）；功能提交 `fba824d2`（资料包绑定此提交）
 - 上轮复验：`docs/wiki_expansion_batch1_reacceptance_2f31a08_2026-10-10.md`
 - 交付说明：`docs/wiki_expansion_batch1_delivery.md`；私有资料包清单：`docs/wiki_expansion_batch1_pack_inventory.md`
 - 性质：**研发自测材料，非签收结论**；本批资料独立验收后由第五阶段在冻结版本对齐，不自行进入正式发布包。
@@ -9,7 +9,7 @@
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
-git rev-parse --short HEAD            # 应为 ead9ad0b
+git rev-parse --short HEAD            # 应为 fba824d2（功能提交；交付基线为 wiki-batch1 最新提交）
 
 node tools\corpus-cli.ts verify
 node app\scripts\build-wiki-catalog.mjs --check
@@ -65,10 +65,10 @@ $env:LIUYAO_PROJECT_ROOT = $null
 ## 私有资料包
 
 ```powershell
-Get-FileHash dist\liuyao-wiki-batch1-ead9ad0b-corpus.zip -Algorithm SHA256
+Get-FileHash dist\liuyao-wiki-batch1-fba824d2-corpus.zip -Algorithm SHA256
 ```
 
-预期 SHA-256：`09c31228eff616a0dc3dd601e47f7c645c115f574272262d19a355eb9d43a874`。解包 150 文件；无 F 盘副本 `verify` 为 122 通过 / 10 条预期源盘不可访问警告 / 0 失败；解包副本批次检查 **36/36**。包绑定提交 `ead9ad0b`。
+预期 SHA-256：`d9d996026765c6642640d65b9cc269215db48eb0c5ad2560e09f4da5e230cfaf`。解包 150 文件、9,347,559 字节；无 F 盘副本 `verify` 为 122 通过 / 10 条预期源盘不可访问警告 / 0 失败；解包副本批次检查 **37/37**、故障注入 **6/6**。包绑定提交 `fba824d2`。
 
 ## 边界与遗留
 
