@@ -8,7 +8,7 @@
  */
 import { selectWikiEvidence, type SelectResult } from '../wiki/select.ts';
 import type { WikiCatalog } from '../wiki/catalog.ts';
-import { describeWikiCoverage, findCoverageFiles } from '../wiki/coverage.ts';
+import { describeWikiCoverage, findCoverageFiles, searchCoverageByTopic } from '../wiki/coverage.ts';
 import { createChartRun, extractChartInputFromText, type ChartInput, type ChartRunResult } from '../chart/service.ts';
 
 export type Intent = 'general' | 'concept' | 'source_comparison' | 'chart' | 'chart_follow_up';
@@ -177,27 +177,37 @@ export function isCastRequestClause(clause: string): boolean {
   );
 }
 
-// ---- 收录范围问答（wiki_expansion_batch1 §4） ----
-const COVERAGE_SUMMARY_RE = /录入了哪些|有哪些资料|有多少本|收录了多少|收录范围|资料清单|有哪些来源|几本书|哪些书|什么资料|录了哪些|收录了哪些|收录了些什么/;
-const COVERAGE_FILE_RE = /有没有|是否收录|收录了吗|包含|查一下|有这本书|有这本书吗|收录了/;
+// ---- 收录范围问答（wiki_expansion_batch1 §4 / 复验 P1-2） ----
+// 五路区分：目录总览 / 具体文件 / 主题 / 本次引用 / 普通知识（不拦截）
+const COVERAGE_THIS_TURN_RE = /这次(?:引用了|用了|参考了)|本次(?:引用了|用了)|引用了哪些(?:来源|资料)|用了哪些(?:来源|资料)|参考了哪些/;
+const COVERAGE_OVERVIEW_RE = /收录了?(?:什么|哪些|多少)|录入了?(?:什么|哪些|多少)|录了多少|有多少(?:份|本|个)|资料清单|收录范围|有哪些(?:资料|来源|书)|几本(?:书)?|收了多少/;
 
-function coverageFileQueryOf(question: string): string {
-  return question
-    .replace(/有没有|是否收录|收录了吗|包含|查一下|这本书|那本书|这本|那本|了吗|呢|吗|收录了|？|\?|\s/g, '')
-    .trim();
+function topicQueryOf(question: string): string | null {
+  let m = /关于(.{1,15}?)(?:的|方面|相关)?(?:资料|内容|来源|材料)/.exec(question);
+  if (m?.[1]?.trim()) return m[1].trim();
+  m = /(.{1,15}?)(?:方面|相关)(?:的)?(?:资料|内容|来源|材料)/.exec(question);
+  if (m?.[1]?.trim()) return m[1].trim();
+  return null;
+}
+
+function fileQueryOf(question: string): string | null {
+  const m = /(?:有没有|是否收录|收录了吗|收了吗|查一下|收录了)(.{1,20}?)(?:这本书|那本书|这书|文件|吗|呢|么|书)/.exec(question);
+  if (!m?.[1]?.trim()) return null;
+  return m[1].replace(/[？?\s。.、]/g, '').trim();
 }
 
 function buildCoverageSummaryReply(coverage: ReturnType<typeof describeWikiCoverage>): string {
   const lines = [
     '按当前本地 Wiki 清单（由程序从 manifest 与目录生成，非模型估计）：',
     '',
-    `- 已导入原件：${coverage.counts.imported} 份（含源文件与哈希登记，不等于已提取或已编入）`,
+    `- 已导入原件：${coverage.counts.imported} 份（原件存在且哈希一致，不等于已提取或已编入）`,
     `- 已提取/清洗：${coverage.counts.processed} 份（有可定位文本，不等于已成 Wiki 规则）`,
-    `- 已编入 Wiki：${coverage.counts.wikiIndexed} 份来源（来源页/概念页中有可定位主张）`,
+    `- 已编入 Wiki：${coverage.counts.wikiIndexed} 份来源（来源页/目录登记）`,
+    `- 其中已核对可引用规则：${coverage.counts.citable} 份（质量非 needs_review）`,
     '',
-    '明细（来源 ID｜文件名｜格式｜质量｜提取｜编入）：',
+    '明细（来源 ID｜文件名｜格式｜质量｜原件｜提取｜编入｜可引用）：',
     ...coverage.files.map(
-      (f) => `- ${f.sourceId} ${f.relativePathFromF}｜${f.format}｜${f.quality}｜提取=${f.processed ? '是' : '否'}｜编入=${f.wikiIndexed ? '是' : '否'}`,
+      (f) => `- ${f.sourceId} ${f.relativePathFromF}｜${f.format}｜${f.quality}｜原件=${f.imported ? '是' : '否'}｜提取=${f.processed ? '是' : '否'}｜编入=${f.wikiIndexed ? '是' : '否'}｜可引用=${f.citable ? '是' : '否'}`,
     ),
     '',
     '说明：本轮实际引用的来源以回答中标注的编号为准，不代表全库总数。',
@@ -215,23 +225,40 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   const wiki = selectWikiEvidence(params.projectRoot, params.catalog, question);
   for (const page of wiki.selectedPages) reasons.push(`选中 ${page.path}（${page.reason}）`);
 
-  // 1.5) 收录范围问答：确定性本地回答（数据只来自 manifest + catalog），不让模型从本轮 S 反推全库
-  const isCoverageSummary = COVERAGE_SUMMARY_RE.test(question);
-  const coverageFileQuery = !isCoverageSummary && COVERAGE_FILE_RE.test(question) ? coverageFileQueryOf(question) : null;
-  if (coverageFileQuery !== null || isCoverageSummary) {
-    const coverage = describeWikiCoverage(params.projectRoot);
-    let coverageReply: string;
-    if (coverageFileQuery !== null) {
-      const hits = findCoverageFiles(params.projectRoot, coverageFileQuery);
-      coverageReply =
-        hits.length === 0
-          ? `本地 Wiki 尚未登记或尚未编入「${coverageFileQuery}」。当前已编入的来源共 ${coverage.counts.wikiIndexed} 份（以目录清单为准），我不会编造"已读过"。\n\n最终结果：未找到该资料。`
-          : `本地 Wiki 已登记以下与「${coverageFileQuery}」相关的来源：\n${hits
-              .map((h) => `- ${h.sourceId} ${h.relativePathFromF}｜${h.format}｜${h.quality}｜提取=${h.processed ? '是' : '否'}｜编入=${h.wikiIndexed ? '是' : '否'}`)
-              .join('\n')}\n\n最终结果：以上为程序生成的匹配结果。`;
+  // 1.5) 收录范围问答：五路区分，确定性本地回答（数据只来自 manifest + catalog + 本轮实际选页）
+  let coverageReply: string | null = null;
+  if (COVERAGE_THIS_TURN_RE.test(question)) {
+    // 本次引用：来自本轮选页真正选中并标注的编号来源，不重新选页冒充
+    const usedIds = [...new Set(wiki.snippets.filter((snippet) => snippet.citable && snippet.sourceId).map((snippet) => snippet.sourceId))];
+    coverageReply =
+      usedIds.length === 0
+        ? '这一问没有引用任何编号来源（未命中可核对来源，或为本地澄清）。\n\n最终结果：本轮未使用来源。'
+        : `这一问实际使用的编号来源：\n${usedIds.map((id) => `- ${id}`).join('\n')}\n\n（这是本轮选页真正选中的来源，不代表全库总数。）\n\n最终结果：本轮引用了 ${usedIds.length} 份来源。`;
+  } else if (COVERAGE_OVERVIEW_RE.test(question)) {
+    coverageReply = buildCoverageSummaryReply(describeWikiCoverage(params.projectRoot));
+  } else if (topicQueryOf(question)) {
+    const topic = topicQueryOf(question)!;
+    const hits = searchCoverageByTopic(params.projectRoot, topic);
+    coverageReply =
+      hits.length === 0
+        ? `本地 Wiki 尚未编入关于「${topic}」的资料。\n\n最终结果：未找到该主题。`
+        : `关于「${topic}」的本地资料：\n${hits.map((h) => `- ${h.title}（${h.kind}）｜来源：${h.sourceIds.length ? h.sourceIds.join(', ') : '无'}`).join('\n')}\n\n最终结果：以上为主题匹配结果。`;
+  } else if (fileQueryOf(question)) {
+    const fileQuery = fileQueryOf(question)!;
+    const hits = findCoverageFiles(params.projectRoot, fileQuery);
+    if (hits.length > 0) {
+      coverageReply = `本地 Wiki 已登记以下与「${fileQuery}」相关的来源：\n${hits
+        .map((h) => `- ${h.sourceId} ${h.relativePathFromF}｜${h.format}｜${h.quality}｜提取=${h.processed ? '是' : '否'}｜编入=${h.wikiIndexed ? '是' : '否'}｜可引用=${h.citable ? '是' : '否'}`)
+        .join('\n')}\n\n最终结果：以上为程序生成的匹配结果。`;
     } else {
-      coverageReply = buildCoverageSummaryReply(coverage);
+      const topicHits = searchCoverageByTopic(params.projectRoot, fileQuery);
+      coverageReply =
+        topicHits.length === 0
+          ? `本地 Wiki 尚未登记或尚未编入「${fileQuery}」这个文件/书名，也没有相关主题。当前已编入来源 ${describeWikiCoverage(params.projectRoot).counts.wikiIndexed} 份，我不会编造"已读过"。\n\n最终结果：未找到该资料。`
+          : `本地没有名为「${fileQuery}」的文件，但存在相关主题资料：\n${topicHits.map((h) => `- ${h.title}（${h.kind}）｜来源：${h.sourceIds.length ? h.sourceIds.join(', ') : '无'}`).join('\n')}\n\n最终结果：无此文件名，但相关主题存在。`;
     }
+  }
+  if (coverageReply !== null) {
     reasons.push('识别为收录范围问答，由程序从 manifest + catalog 生成清单');
     return {
       plan: {

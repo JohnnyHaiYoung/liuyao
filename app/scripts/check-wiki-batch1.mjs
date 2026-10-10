@@ -45,5 +45,28 @@ check('断卦技法概念页含来源 src-fd45fbed3007', Boolean(duangua?.source
 const src31 = catalog.pages.find((p) => p.pageId === 'source:src-31cafa8c2634');
 check('来源页 src-31cafa8c2634 可读且哈希一致', Boolean(src31 && readCatalogPage(root, src31).hashMatches), src31?.path ?? '');
 
+// 5) 收录问答路由（复验 P1-2）：五路区分，planTurn 级
+const { planTurn, buildMissingInputReply } = await import('../src/server/chat/planner.ts');
+function routeReply(q) {
+  const r = planTurn({ question: q, projectRoot: root, catalog, promptVersion: 'phase4-v1' });
+  return { kind: r.plan.clarificationKind ?? null, reply: buildMissingInputReply(r.plan) ?? '' };
+}
+const ov = routeReply('收录了什么？');
+check('「收录了什么？」→ 目录总览', ov.kind === 'coverage' && ov.reply.includes('已导入原件'), ov.kind);
+const cnt = routeReply('目前录入了多少份？');
+check('「目前录入了多少份？」→ 分层数量', cnt.kind === 'coverage' && cnt.reply.includes('已核对可引用规则'), cnt.kind);
+const cnt2 = routeReply('录入了哪些资料');
+check('「录入了哪些资料」→ 目录总览', cnt2.kind === 'coverage', cnt2.kind);
+const file = routeReply('有没有六爻断卦技法这本书');
+check('「有没有六爻断卦技法这本书」→ 命中 src-fd45fbed3007', file.kind === 'coverage' && file.reply.includes('src-fd45fbed3007'), file.kind);
+const topic = routeReply('有没有关于用神的资料？');
+check('「有没有关于用神的资料？」→ 主题命中用神', topic.kind === 'coverage' && (topic.reply.includes('取用神') || topic.reply.includes('yongshen') || topic.reply.includes('src-08862b06aea9')), topic.reply.slice(0, 40));
+const know = routeReply('六神里面有没有官鬼？');
+check('「六神里面有没有官鬼？」→ 普通知识（不拦截）', know.kind === null, String(know.kind));
+const thisTurn = routeReply('这次引用了什么？');
+check('「这次引用了什么？」→ 本次引用（coverage）', thisTurn.kind === 'coverage' && (thisTurn.reply.includes('实际使用') || thisTurn.reply.includes('未使用来源')), thisTurn.reply.slice(0, 40));
+const none = routeReply('收录了不存在书名吗');
+check('「收录了不存在书名吗」→ 未找到且不编造', none.kind === 'coverage' && none.reply.includes('未找到该资料'), none.kind);
+
 console.log(`\n合计：${pass}/${pass + fail} 通过，${fail} 项不通过`);
 process.exit(fail === 0 ? 0 : 1);
