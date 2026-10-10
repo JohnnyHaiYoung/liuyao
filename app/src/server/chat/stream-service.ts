@@ -13,7 +13,7 @@ import { deriveAutoTitle } from './title';
 import { loadCatalog, resolveProjectRoot, type WikiCatalog } from '../wiki/catalog';
 import { buildTurnContext, type TurnContext } from './context';
 import { buildSourceHref, validateCitations } from './citations';
-import { buildAppendedClarification, buildMissingInputReply, planTurn, type PlanObject } from './planner';
+import { buildAppendedClarification, buildMissingInputReply, isCitationFollowup, planTurn, type PlanObject } from './planner';
 import * as chartSnapshots from '../chart/snapshots';
 import { summarizeChart, summarizeStoredChart } from '../chart/summary';
 import type { ChartInput } from '../chart/service';
@@ -181,9 +181,8 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
   }
 
   const currentChartRun = chartSnapshots.getCurrentChartRun(db, params.conversationId);
-  // 复验 P1-1：引用追问（这次/刚才/上一条引用了什么）读上一答持久化引用快照，不重新选页推断历史引用
-  const CITATION_FOLLOWUP_RE = /这次(?:引用了|用了|参考了)|刚才(?:那条|这条)?(?:回答)?(?:引用了|用了|参考了)|上一条(?:引用了|用了)|本次(?:引用了|用了)/;
-  const previousCitations = CITATION_FOLLOWUP_RE.test(params.content)
+  // 复验 04e77bd P1：引用追问识别与 planner 共用 isCitationFollowup，不再各自复制正则
+  const previousCitations = isCitationFollowup(params.content)
     ? (() => {
         const prev = db
           .prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'assistant' AND status = 'completed' ORDER BY rowid DESC LIMIT 1")

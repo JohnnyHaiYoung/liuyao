@@ -318,6 +318,7 @@
       "displayName": "src-a76b03f471fe",
       "topics": [
         "章节目录（按清洗文本锚点定位，仅登记结构，非已核对规则）",
+        "已核对章节（本批完成的一个明确六爻章节）",
         "编入范围与边界",
         "定位与质量提醒"
       ],
@@ -329,8 +330,8 @@
       "qualityStatus": "needs_review",
       "qualityRank": 1,
       "applicableQuestions": [],
-      "bytes": 3071,
-      "sha256": "76fb8a9817dab8a22e36da9d548209dec2704c6e42f02d0c81b6d6958b492e5e"
+      "bytes": 4616,
+      "sha256": "568ea13d0447424aa188e5519985eb3de82c3392c8e7a82e98f18ebd01cba5e4"
     },
     {
       "pageId": "source:src-e6fc8612e955",

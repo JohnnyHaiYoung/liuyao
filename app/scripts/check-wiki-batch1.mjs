@@ -65,20 +65,21 @@ const know = routeReply('六神里面有没有官鬼？');
 check('「六神里面有没有官鬼？」→ 普通知识（不拦截）', know.kind === null, String(know.kind));
 const thisTurn = routeReply('这次引用了什么？');
 check('「这次引用了什么？」无上一答 → 明说无可用引用', thisTurn.kind === 'coverage' && thisTurn.reply.includes('无可用引用'), thisTurn.reply.slice(0, 40));
-// 复验 P1-1：有上一答持久化引用快照时，列出快照（与 done.sourceIds 一致），不重新选页
+// 复验 04e77bd P1：四种引用追问均读上一答持久化引用快照，编号/来源/定位/质量完全一致
 const { planTurn: pt } = await import('../src/server/chat/planner.ts');
-const withPrev = pt({
-  question: '刚才那条回答引用了哪些来源？',
-  projectRoot: root,
-  catalog,
-  promptVersion: 'phase4-v1',
-  previousCitations: [
-    { sid: 'S1', sourceId: 'src-777319b69476', locatorValue: '¶0002', qualityStatus: 'usable' },
-    { sid: 'S3', sourceId: 'src-777319b69476', locatorValue: '¶0005', qualityStatus: 'usable' },
-  ],
-});
-const withPrevReply = buildMissingInputReply(withPrev.plan) ?? '';
-check('有上一答快照 → 列 S1/S3（src-777319b69476）且含质量', withPrevReply.includes('S1') && withPrevReply.includes('src-777319b69476') && withPrevReply.includes('usable'), withPrevReply.slice(0, 60));
+const prevSnapshot = [
+  { sid: 'S1', sourceId: 'src-777319b69476', locatorValue: '¶0002', qualityStatus: 'usable' },
+  { sid: 'S3', sourceId: 'src-777319b69476', locatorValue: '¶0005', qualityStatus: 'usable' },
+];
+for (const phrase of ['这次引用了什么？', '刚才引用了什么？', '上一条引用了什么？', '引用了哪些来源？', '用了哪些资料？']) {
+  const r = pt({ question: phrase, projectRoot: root, catalog, promptVersion: 'phase4-v1', previousCitations: prevSnapshot });
+  const reply = buildMissingInputReply(r.plan) ?? '';
+  const full = prevSnapshot.every((c) => reply.includes(c.sid) && reply.includes(c.sourceId) && reply.includes(c.locatorValue) && reply.includes(c.qualityStatus));
+  check(`「${phrase}」→ 完整列出 S1/S3 编号·来源·定位·质量`, r.plan.clarificationKind === 'coverage' && full, reply.slice(0, 60));
+}
+// 上一答无引用 → 明说无可用引用
+const noCite = pt({ question: '这次引用了什么？', projectRoot: root, catalog, promptVersion: 'phase4-v1', previousCitations: [] });
+check('上一答无引用 → 明说无可用引用', (buildMissingInputReply(noCite.plan) ?? '').includes('无可用引用'), '');
 
 // P2-1：具体文件问法新措辞
 for (const filePhrase of ['有没有六爻断卦技法？', '收录六爻断卦技法了吗？', '你读过《六爻断卦技法》吗？']) {
@@ -92,6 +93,7 @@ check('主题查询不含「维护记录」', !topic2.reply.includes('维护记�
 // P2-4：长讲义正文未核对标 needs_review；断卦技法卦例段不得当已核对规则
 const txSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-a76b03f471fe')).text;
 check('讲义来源页标 needs_review 且明说正文未逐段核对', txSrc.includes('needs_review') && txSrc.includes('未逐段核对'), '');
+check('讲义已核对章节「爻象」标起止 ¶0215–¶0218', txSrc.includes('¶0215') && txSrc.includes('¶0218') && txSrc.includes('爻象'), '');
 const dgSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-fd45fbed3007')).text;
 check('断卦技法卦例段（¶0018–¶0028）标 needs_review、不得当已核对规则', dgSrc.includes('¶0018') && dgSrc.includes('needs_review') && (dgSrc.includes('不代表案例可核实') || dgSrc.includes('不得作为可验证案例')), '');
 

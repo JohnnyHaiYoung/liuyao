@@ -181,7 +181,15 @@ export function isCastRequestClause(clause: string): boolean {
 
 // ---- 收录范围问答（wiki_expansion_batch1 §4 / 复验 P1-2） ----
 // 五路区分：目录总览 / 具体文件 / 主题 / 本次引用 / 普通知识（不拦截）
-const COVERAGE_THIS_TURN_RE = /这次(?:引用了|用了|参考了)|本次(?:引用了|用了)|引用了哪些(?:来源|资料)|用了哪些(?:来源|资料)|参考了哪些/;
+
+/** 引用追问的唯一识别规则（复验 04e77bd P1）：服务层与 planner 共用，不得各自复制正则。
+ *  覆盖："这次/本次/刚才/上一条 + 引用了/用了/参考了 + 什么/哪些来源/哪些资料"。 */
+const CITATION_FOLLOWUP_RE =
+  /这次(?:引用了|用了|参考了)|本次(?:引用了|用了)|刚才(?:那条|这条)?(?:回答)?(?:引用了|用了|参考了)|上一条(?:引用了|用了)|引用了哪些(?:来源|资料)|用了哪些(?:来源|资料)|参考了哪些/;
+export function isCitationFollowup(question: string): boolean {
+  return CITATION_FOLLOWUP_RE.test(question);
+}
+
 const COVERAGE_OVERVIEW_RE = /收录了?(?:什么|哪些|多少)|录入了?(?:什么|哪些|多少)|录了多少|有多少(?:份|本|个)|资料清单|收录范围|有哪些(?:资料|来源|书)|几本(?:书)?|收了多少/;
 
 function topicQueryOf(question: string): string | null {
@@ -233,7 +241,7 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
 
   // 1.5) 收录范围问答：五路区分，确定性本地回答（数据只来自 manifest + catalog + 本轮实际选页）
   let coverageReply: string | null = null;
-  if (COVERAGE_THIS_TURN_RE.test(question)) {
+  if (isCitationFollowup(question)) {
     // 复验 P1-1：读上一答已完成助手消息持久化的引用快照（与 done.sourceIds 一致），不重新选页推断历史引用
     const prev = params.previousCitations;
     coverageReply =
