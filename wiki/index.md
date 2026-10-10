@@ -24,7 +24,7 @@
 | [src-31cafa8c2634](sources/src-31cafa8c2634.md) | TXT | 全文（1 段） | `usable` | 无署名；取用神「诀窍」式转述，不可当古籍原文 |
 | [src-777319b69476](sources/src-777319b69476.md) | TXT | 全文（9 段） | `usable` | 转载无作者；六神临六亲取象词典式转述 |
 | [src-fd45fbed3007](sources/src-fd45fbed3007.md) | TXT | 全文（28 段） | `usable` | 署名「林潮」；卦例段录入错字多、按 `needs_review`；近名 ..txt 已比对不合并 |
-| [src-a76b03f471fe](sources/src-a76b03f471fe.md) | TXT | 全文已提取（383 段）；仅编入章节目录 | `usable` | 「曲炜」讲义转载；梅花易断/六爻占断分轨 |
+| [src-a76b03f471fe](sources/src-a76b03f471fe.md) | TXT | 全文已提取（383 段）；仅编入章节目录 | `needs_review` | 「曲炜」讲义转载；正文规则未逐段核对；梅花易断/六爻占断分轨 |
 
 ## 当前覆盖与边界
 

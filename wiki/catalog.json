@@ -2,7 +2,7 @@
   "catalogVersion": "wiki-catalog.v1",
   "generatedFrom": {
     "indexPath": "wiki/index.md",
-    "indexSha256": "ed69b2f9befa2e183f30e0bd2a5636a51d28d1043025e45af00e574eb2166ced",
+    "indexSha256": "c3e2e2bdbdd84eb6bbf8cd7a99759c760bad78fd9a6d02c65060f25f7fece6fb",
     "note": "由 app/scripts/build-wiki-catalog.mjs 生成；不写入时间戳以保证 --check 可做漂移检测"
   },
   "pageCount": 16,
@@ -326,11 +326,11 @@
       "sourceIds": [
         "src-a76b03f471fe"
       ],
-      "qualityStatus": "usable",
-      "qualityRank": 0,
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
       "applicableQuestions": [],
-      "bytes": 3016,
-      "sha256": "7b290b003c558051964231d1acb849aacb294df63c38017092ca5dd35a4632e7"
+      "bytes": 3071,
+      "sha256": "76fb8a9817dab8a22e36da9d548209dec2704c6e42f02d0c81b6d6958b492e5e"
     },
     {
       "pageId": "source:src-e6fc8612e955",
