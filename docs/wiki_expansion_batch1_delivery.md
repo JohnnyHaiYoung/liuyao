@@ -50,10 +50,11 @@
 | `npm run typecheck`（app） | 退出码 0 |
 | `node tools/corpus-cli.ts verify` | **132 通过、0 警告、0 失败**（10 份来源定位链完整） |
 | `node app/scripts/build-wiki-catalog.mjs --check` | 目录一致：16 页，哈希匹配 |
-| `node --import … app/scripts/check-wiki-batch1.mjs` | **14/14** |
+| `node --import … app/scripts/check-wiki-batch1.mjs` | **28/28**（四层分档、五路路由、上一答引用快照、卦例段 needs_review） |
+| `node --import … app/scripts/check-wiki-batch1-faultinject.mjs` | **6/6**（缺原件/篡改原件/缺清洗 → 不可引用，恢复后可引用） |
 | `node app/scripts/check-orchestration.mjs` | **107/107**（阶段 4 意图判定未回退） |
 | `node --import … app/scripts/check-phase4-e2e.mjs` | **66/66**（阶段 4 主流程未回退） |
-| `npm run check:all -- --with-http --with-ui` | 见本轮后台运行结果（浏览器级 + 阶段 1 HTTP 回归） |
+| `node --import … app/scripts/check-migration-phase4.mjs` | **30/30、退出码 0**（正式库哈希未变） |
 
 ## 4. 可复跑命令
 

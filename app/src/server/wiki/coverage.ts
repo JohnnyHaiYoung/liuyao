@@ -134,15 +134,17 @@ export function findCoverageFiles(projectRoot: string, query: string): CoverageF
   );
 }
 
-/** 主题查询：按标题/别名/主题词在目录中匹配页面及其来源（用于"有没有关于X的资料"）。 */
+/** 主题查询：按标题/别名/主题词在目录中匹配页面及其来源（用于"有没有关于X的资料"）。
+ *  排除维护日志/规则页等非资料页；返回质量状态供回答标注。 */
 export function searchCoverageByTopic(
   projectRoot: string,
   topic: string,
-): Array<{ pageId: string; title: string; kind: string; sourceIds: string[] }> {
+): Array<{ pageId: string; title: string; kind: string; sourceIds: string[]; qualityStatus: string }> {
   const catalog = loadCatalog(projectRoot);
   const q = topic.trim().toLowerCase();
   if (q === '') return [];
   return catalog.pages
+    .filter((page) => page.kind !== 'log' && page.kind !== 'schema' && page.kind !== 'index')
     .filter((page) => {
       const hay = [page.title ?? '', page.displayName ?? '', ...(page.aliases ?? []), ...(page.topics ?? [])]
         .join(' ')
@@ -154,5 +156,29 @@ export function searchCoverageByTopic(
       title: page.displayName ?? page.title ?? page.pageId,
       kind: page.kind,
       sourceIds: page.sourceIds ?? [],
+      qualityStatus: page.qualityStatus ?? 'unknown',
     }));
+}
+
+/**
+ * 来源数据链就绪判定（复验 P1-2）：编号证据产生前必须同时满足
+ *   原件存在且哈希与 manifest 一致、清洗文本存在。
+ * 目录页哈希一致性由调用方（select.ts 的 readCatalogPage.hashMatches）另行保证。
+ */
+export function sourceDataReady(
+  projectRoot: string,
+  sourceId: string,
+): { ready: boolean; reason: string } {
+  const manifest = loadSourceManifest(projectRoot);
+  const record = manifest.get(sourceId);
+  if (!record) return { ready: false, reason: '来源未在 manifest 登记' };
+  const processing = record.processing as Record<string, unknown> | undefined;
+  const originalRelative = str(record.originalRelativePath);
+  const cleanedPath = str(processing?.cleanedPath);
+
+  const originalAbs = join(projectRoot, originalRelative);
+  if (!fileExists(originalAbs)) return { ready: false, reason: '原件缺失' };
+  if (sha256File(originalAbs) !== str(record.sha256)) return { ready: false, reason: '原件哈希与清单不一致' };
+  if (!fileExists(join(projectRoot, cleanedPath))) return { ready: false, reason: '清洗文本缺失' };
+  return { ready: true, reason: '' };
 }

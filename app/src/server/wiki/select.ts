@@ -16,6 +16,7 @@ import {
   type WikiCatalog,
   type WikiRuntimeOptions,
 } from './catalog.ts';
+import { sourceDataReady } from './coverage.ts';
 
 export interface SelectedPage {
   pageId: string;
@@ -275,7 +276,9 @@ export function selectWikiEvidence(
     const attributed = attributeSourceId(text, lineIndex, catalogPage);
     const locator = locatorOf(excerpt, catalogPage, attributed);
     sid += 1;
-    const citable = locator.type !== 'none' && locator.sourceId !== null && hit;
+    // 复验 P1-2：编号证据除定位外，还要求来源数据链就绪（原件哈希一致 + 清洗文本存在）
+    const dataReady = locator.sourceId !== null ? sourceDataReady(projectRoot, locator.sourceId) : { ready: false, reason: '无来源归属' };
+    const citable = locator.type !== 'none' && locator.sourceId !== null && hit && dataReady.ready;
     snippets.push({
       sid: `S${sid}`,
       pageId: page.pageId,
@@ -296,7 +299,9 @@ export function selectWikiEvidence(
           ? '无法归属到具体 source_id（页内未找到来源标注），不能作为可点击出处'
           : locator.type === 'none'
             ? '未找到 ¶NNNN/页码定位，不能作为可点击出处'
-            : '未命中问题相关行，仅作背景',
+            : !dataReady.ready
+              ? `来源数据链未就绪（${dataReady.reason}），不能作为可点击出处`
+              : '未命中问题相关行，仅作背景',
     });
     if (!citable) warnings.push(`片段 ${sid}（${page.path}）不可引用：${snippets[snippets.length - 1]!.reason}`);
     if (page.qualityStatus === 'needs_review') {

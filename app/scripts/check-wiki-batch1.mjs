@@ -64,9 +64,36 @@ check('「有没有关于用神的资料？」→ 主题命中用神', topic.kin
 const know = routeReply('六神里面有没有官鬼？');
 check('「六神里面有没有官鬼？」→ 普通知识（不拦截）', know.kind === null, String(know.kind));
 const thisTurn = routeReply('这次引用了什么？');
-check('「这次引用了什么？」→ 本次引用（coverage）', thisTurn.kind === 'coverage' && (thisTurn.reply.includes('实际使用') || thisTurn.reply.includes('未使用来源')), thisTurn.reply.slice(0, 40));
-const none = routeReply('收录了不存在书名吗');
-check('「收录了不存在书名吗」→ 未找到且不编造', none.kind === 'coverage' && none.reply.includes('未找到该资料'), none.kind);
+check('「这次引用了什么？」无上一答 → 明说无可用引用', thisTurn.kind === 'coverage' && thisTurn.reply.includes('无可用引用'), thisTurn.reply.slice(0, 40));
+// 复验 P1-1：有上一答持久化引用快照时，列出快照（与 done.sourceIds 一致），不重新选页
+const { planTurn: pt } = await import('../src/server/chat/planner.ts');
+const withPrev = pt({
+  question: '刚才那条回答引用了哪些来源？',
+  projectRoot: root,
+  catalog,
+  promptVersion: 'phase4-v1',
+  previousCitations: [
+    { sid: 'S1', sourceId: 'src-777319b69476', locatorValue: '¶0002', qualityStatus: 'usable' },
+    { sid: 'S3', sourceId: 'src-777319b69476', locatorValue: '¶0005', qualityStatus: 'usable' },
+  ],
+});
+const withPrevReply = buildMissingInputReply(withPrev.plan) ?? '';
+check('有上一答快照 → 列 S1/S3（src-777319b69476）且含质量', withPrevReply.includes('S1') && withPrevReply.includes('src-777319b69476') && withPrevReply.includes('usable'), withPrevReply.slice(0, 60));
+
+// P2-1：具体文件问法新措辞
+for (const filePhrase of ['有没有六爻断卦技法？', '收录六爻断卦技法了吗？', '你读过《六爻断卦技法》吗？']) {
+  const f = routeReply(filePhrase);
+  check(`「${filePhrase}」→ 文件命中 src-fd45fbed3007`, f.kind === 'coverage' && f.reply.includes('src-fd45fbed3007'), f.kind);
+}
+// P2-2：主题查询不含维护日志
+const topic2 = routeReply('有没有关于用神的资料？');
+check('主题查询不含「维护记录」', !topic2.reply.includes('维护记录'), '');
+
+// P2-4：长讲义正文未核对标 needs_review；断卦技法卦例段不得当已核对规则
+const txSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-a76b03f471fe')).text;
+check('讲义来源页标 needs_review 且明说正文未逐段核对', txSrc.includes('needs_review') && txSrc.includes('未逐段核对'), '');
+const dgSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-fd45fbed3007')).text;
+check('断卦技法卦例段（¶0018–¶0028）标 needs_review、不得当已核对规则', dgSrc.includes('¶0018') && dgSrc.includes('needs_review') && (dgSrc.includes('不代表案例可核实') || dgSrc.includes('不得作为可验证案例')), '');
 
 console.log(`\n合计：${pass}/${pass + fail} 通过，${fail} 项不通过`);
 process.exit(fail === 0 ? 0 : 1);

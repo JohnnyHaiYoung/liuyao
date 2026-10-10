@@ -181,6 +181,22 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
   }
 
   const currentChartRun = chartSnapshots.getCurrentChartRun(db, params.conversationId);
+  // 复验 P1-1：引用追问（这次/刚才/上一条引用了什么）读上一答持久化引用快照，不重新选页推断历史引用
+  const CITATION_FOLLOWUP_RE = /这次(?:引用了|用了|参考了)|刚才(?:那条|这条)?(?:回答)?(?:引用了|用了|参考了)|上一条(?:引用了|用了)|本次(?:引用了|用了)/;
+  const previousCitations = CITATION_FOLLOWUP_RE.test(params.content)
+    ? (() => {
+        const prev = db
+          .prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'assistant' AND status = 'completed' ORDER BY rowid DESC LIMIT 1")
+          .get(params.conversationId) as { id: string } | undefined;
+        if (!prev) return [];
+        return chartSnapshots.listMessageSources(db, prev.id).map((source) => ({
+          sid: source.sid,
+          sourceId: source.sourceId,
+          locatorValue: source.locatorValue,
+          qualityStatus: source.qualityStatus,
+        }));
+      })()
+    : null;
   const planned = catalog
     ? planTurn({
         question: params.content,
@@ -190,6 +206,7 @@ export function startChatStream(params: StartChatParams): StartChatOutcome {
         currentChartRunId: currentChartRun?.id ?? null,
         explicitNewChart: params.chartAction === 'new',
         promptVersion: PHASE4_PROMPT_VERSION,
+        previousCitations,
       })
     : null;
   const plan: PlanObject | null = planned?.plan ?? null;

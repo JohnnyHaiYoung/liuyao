@@ -55,6 +55,8 @@ export interface PlanTurnParams {
   /** 用户明确要求"另起一卦/新卦" */
   explicitNewChart?: boolean;
   promptVersion: string;
+  /** 上一答已完成助手消息持久化的引用快照（复验 P1-1）；用于"这次/刚才/上一条引用了什么" */
+  previousCitations?: Array<{ sid: string; sourceId: string; locatorValue: string | null; qualityStatus: string }> | null;
 }
 
 export interface PlanTurnResult {
@@ -191,9 +193,13 @@ function topicQueryOf(question: string): string | null {
 }
 
 function fileQueryOf(question: string): string | null {
-  const m = /(?:有没有|是否收录|收录了吗|收了吗|查一下|收录了)(.{1,20}?)(?:这本书|那本书|这书|文件|吗|呢|么|书)/.exec(question);
-  if (!m?.[1]?.trim()) return null;
-  return m[1].replace(/[？?\s。.、]/g, '').trim();
+  // 知识问法护栏："六神里面有没有官鬼"是"X 里有没有 Y"，不是文件收录查询
+  if (/里面有没有|中有没有|里边有没有|内有没有|里头有没有/.test(question)) return null;
+  const cleaned = question.replace(/[《》「」]/g, '');
+  const m = /(?:有没有|是否收录|收录了?|收了吗|查一下|读过|看过)(.{1,20}?)(?:这本书|那本书|这书|文件|吗|呢|么|了|？|\?|$)/.exec(cleaned);
+  if (!m?.[1]) return null;
+  const q = m[1].replace(/[？?\s。.、]/g, '').trim();
+  return q === '' ? null : q;
 }
 
 function buildCoverageSummaryReply(coverage: ReturnType<typeof describeWikiCoverage>): string {
@@ -228,12 +234,14 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 1.5) 收录范围问答：五路区分，确定性本地回答（数据只来自 manifest + catalog + 本轮实际选页）
   let coverageReply: string | null = null;
   if (COVERAGE_THIS_TURN_RE.test(question)) {
-    // 本次引用：来自本轮选页真正选中并标注的编号来源，不重新选页冒充
-    const usedIds = [...new Set(wiki.snippets.filter((snippet) => snippet.citable && snippet.sourceId).map((snippet) => snippet.sourceId))];
+    // 复验 P1-1：读上一答已完成助手消息持久化的引用快照（与 done.sourceIds 一致），不重新选页推断历史引用
+    const prev = params.previousCitations;
     coverageReply =
-      usedIds.length === 0
-        ? '这一问没有引用任何编号来源（未命中可核对来源，或为本地澄清）。\n\n最终结果：本轮未使用来源。'
-        : `这一问实际使用的编号来源：\n${usedIds.map((id) => `- ${id}`).join('\n')}\n\n（这是本轮选页真正选中的来源，不代表全库总数。）\n\n最终结果：本轮引用了 ${usedIds.length} 份来源。`;
+      prev && prev.length > 0
+        ? `上一答实际引用的编号来源（与 done.sourceIds 一致）：\n${prev
+            .map((c) => `- ${c.sid}（${c.sourceId} ${c.locatorValue ?? ''}）｜质量：${c.qualityStatus}`)
+            .join('\n')}\n\n最终结果：上一答引用了 ${prev.length} 份来源。`
+        : '没有上一条已完成回复，或上一条回复没有引用编号来源。\n\n最终结果：无可用引用。';
   } else if (COVERAGE_OVERVIEW_RE.test(question)) {
     coverageReply = buildCoverageSummaryReply(describeWikiCoverage(params.projectRoot));
   } else if (topicQueryOf(question)) {
@@ -242,7 +250,7 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
     coverageReply =
       hits.length === 0
         ? `本地 Wiki 尚未编入关于「${topic}」的资料。\n\n最终结果：未找到该主题。`
-        : `关于「${topic}」的本地资料：\n${hits.map((h) => `- ${h.title}（${h.kind}）｜来源：${h.sourceIds.length ? h.sourceIds.join(', ') : '无'}`).join('\n')}\n\n最终结果：以上为主题匹配结果。`;
+        : `关于「${topic}」的本地资料：\n${hits.map((h) => `- ${h.title}（${h.kind}）｜质量：${h.qualityStatus}｜来源：${h.sourceIds.length ? h.sourceIds.join(', ') : '无'}`).join('\n')}\n\n最终结果：以上为主题匹配结果（质量状态为 needs_review 的仅登记、不可作已核对规则）。`;
   } else if (fileQueryOf(question)) {
     const fileQuery = fileQueryOf(question)!;
     const hits = findCoverageFiles(params.projectRoot, fileQuery);
