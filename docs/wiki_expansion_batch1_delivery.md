@@ -1,9 +1,19 @@
 # 本地 Wiki 扩充第一批 · 研发交付说明
 
 - 分支：`wiki-batch1`（自 `main@e5e8b31` 分叉，与第五阶段 Docker 并行，未合并）
-- 提交：`f0d4fe3`（设计）→ `53ff19f`（导入）→ `433a5be`（来源页/目录）→ `162b454`（收录范围模块）→ `90b0bea`（概念页）→ `d2a3e18`（聊天接入）
-- 依据：[任务书](wiki_expansion_batch1_spec.md)、[研发提示词](wiki_expansion_batch1_developer_prompt.md)、[批次设计](wiki_expansion_batch1_design.md)
+- 提交：`f0d4fe3`（设计）→ `53ff19f`（导入）→ `433a5be`（来源页/目录）→ `162b454`（收录范围模块）→ `90b0bea`（概念页）→ `d2a3e18`（聊天接入）→ **复验修复**：`4b5442f`（P1-1 质量报告）→ `69a2351`（P1-2/P2-1 收录路由+四层分档）→ `eb2fc77d`（P2-2 迁移检查）
+- 依据：[任务书](wiki_expansion_batch1_spec.md)、[研发提示词](wiki_expansion_batch1_developer_prompt.md)、[批次设计](wiki_expansion_batch1_design.md)、[独立验收报告](wiki_expansion_batch1_acceptance_d6d74d6_2026-10-09.md)
 - 性质：**研发自测，非独立验收**；本批资料在独立验收并与第五阶段冻结版本对齐前，不进入正式发布包。
+
+## 0. 复验修复摘要（2026-10-09 独立验收 d6d74d6）
+
+| 阻断项 | 修复 | 提交 |
+| --- | --- | --- |
+| P1-1 质量报告未抽查却标 usable | 逐份补开头/中部/末尾/高风险段落抽查、否定词/卦象/爻位核对、疑字、作者版本证据；讲义正文未核对标 `needs_review`；报告/manifest/来源页/目录一致 | `4b5442f` |
+| P1-2 收录问答误报/抢知识问题 | 五路区分（目录总览/具体文件/主题/本次引用/普通知识）；本次引用来自本轮实际 `Sx`；文件未命中时区分"无此文件名"与"相关主题存在" | `69a2351` |
+| P1-3 缺可搬迁私有资料包 | 产出 `dist/liuyao-wiki-batch1-eb2fc77d-corpus.zip`（149 文件，含四份原件），解包到无 F 盘目录逐份哈希一致、无泄密；见 [包清单](wiki_expansion_batch1_pack_inventory.md) | 见包清单 |
+| P2-1 四层统计为元数据计数 | 按磁盘事实（原件存在+哈希一致/清洗存在/来源页存在）与质量分档，新增"已核对可引用规则"一档 | `69a2351` |
+| P2-2 迁移检查旧库夹具假设错误 | 按旧库是否已含 0002 分支断言（幂等 no-op 或新增表），`check:migration-phase4` 30/30 | `eb2fc77d` |
 
 ## 1. 交付物清单
 
