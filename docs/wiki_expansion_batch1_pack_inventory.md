@@ -1,7 +1,7 @@
 # 本地 Wiki 第一批 · 私有资料包清单
 
-- 绑定提交：`eb2fc77d`（后续修复提交见交付说明；本清单对应归档生成时刻的 HEAD）
-- 归档文件：`dist/liuyao-wiki-batch1-eb2fc77d-corpus.zip`
+- 绑定提交：`cf59d288`（复验修复后 HEAD；资料包内容与 `eb2fc77d` 一致，仅提交号前移——本轮改动均为 app 代码，corpus/wiki 数据未变，故归档哈希不变）
+- 归档文件：`dist/liuyao-wiki-batch1-cf59d288-corpus.zip`
 - 归档 SHA-256：`336eec7908d79c86810ff3bb522ca024798bcb2f943ac04edea498068ccd3392`
 - 文件数：149；字节：9,345,196（含阶段 2 六份 + 第一批四份的全部 corpus/wiki/目录）
 - 包内清单文件：`PACK-MANIFEST.txt`（逐文件 SHA-256）
