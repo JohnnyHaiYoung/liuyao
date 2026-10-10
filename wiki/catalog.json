@@ -104,7 +104,13 @@
         "未核实与边界"
       ],
       "aliases": [
+        "初爻为井",
+        "初爻为家贼",
+        "初爻为百姓",
+        "初爻为足",
+        "占人身爻位",
         "占家宅初爻",
+        "占家宅爻位",
         "爻位",
         "爻位怎么看家宅",
         "爻位类象",
@@ -361,8 +367,8 @@
       "qualityStatus": "needs_review",
       "qualityRank": 1,
       "applicableQuestions": [],
-      "bytes": 4974,
-      "sha256": "3872771e0884ac55526edf44eadc311beb63e3ddd3a373110c0d32c639ce41b2"
+      "bytes": 4969,
+      "sha256": "d2848bb5c7846c4cd9e0538aa4fad27ffbeb5e35f5ab9ef63e877d7cfcf14a2c"
     },
     {
       "pageId": "source:src-e6fc8612e955",

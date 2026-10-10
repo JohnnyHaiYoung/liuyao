@@ -94,7 +94,7 @@ check('主题查询不含「维护记录」', !topic2.reply.includes('维护记�
 // P2-4：长讲义正文未核对标 needs_review；断卦技法卦例段不得当已核对规则
 const txSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-a76b03f471fe')).text;
 check('讲义来源页标 needs_review 且明说正文未逐段核对', txSrc.includes('needs_review') && txSrc.includes('未逐段核对'), '');
-check('讲义已核对章节「爻象」标起止 ¶0215–¶0218', txSrc.includes('¶0215') && txSrc.includes('¶0218') && txSrc.includes('爻象'), '');
+check('讲义已核对章节标起止 ¶0215–¶0217 前两句、¶0218 标未核对', txSrc.includes('¶0215') && txSrc.includes('¶0217') && txSrc.includes('¶0218') && txSrc.includes('未核对') && !txSrc.includes('¶0215–¶0218'), '');
 const dgSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-fd45fbed3007')).text;
 check('断卦技法卦例段（¶0018–¶0028）标 needs_review、不得当已核对规则', dgSrc.includes('¶0018') && dgSrc.includes('needs_review') && (dgSrc.includes('不代表案例可核实') || dgSrc.includes('不得作为可验证案例')), '');
 
@@ -105,6 +105,10 @@ check('「爻象怎么解释？」选中讲义且摘录含「初爻为足」、�
 const selJia = selectWikiEvidence(root, catalog, '爻位类象怎么看家宅？');
 const selJiaHit = selJia.snippets.find((s) => s.sourceId === 'src-a76b03f471fe');
 check('「爻位类象怎么看家宅？」摘录含「初爻为井」、定位 ¶0215、质量 needs_review', Boolean(selJiaHit && selJiaHit.citable && selJiaHit.locatorValue === '¶0215' && selJiaHit.qualityStatus === 'needs_review' && selJiaHit.excerpt.includes('初爻为井')), selJiaHit ? `${selJiaHit.locatorValue}/${selJiaHit.citable}` : '未选中');
+// 复验 caedfb8 P1：明确讲义/具体条目问法，摘录必须含「初爻为足」主张
+const selSpec = selectWikiEvidence(root, catalog, '特训班讲义里初爻为足是什么意思？');
+const selSpecHit = selSpec.snippets.find((s) => s.sourceId === 'src-a76b03f471fe' && s.excerpt.includes('初爻为足'));
+check('「特训班讲义里初爻为足是什么意思？」摘录含「初爻为足」、source_id/定位/质量正确', Boolean(selSpecHit && selSpecHit.citable && selSpecHit.locatorValue === '¶0215' && selSpecHit.qualityStatus === 'needs_review'), selSpecHit ? `${selSpecHit.locatorValue}/${selSpecHit.citable}` : '未命中主张行');
 
 console.log(`\n合计：${pass}/${pass + fail} 通过，${fail} 项不通过`);
 process.exit(fail === 0 ? 0 : 1);

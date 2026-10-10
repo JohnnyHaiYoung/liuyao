@@ -37,25 +37,30 @@ node --import ./app/scripts/lib/register-ts.mjs --input-type=module -e "const {l
 node -e "const s=require('fs').readFileSync('wiki/sources/src-a76b03f471fe.md','utf8');console.log(s.includes('¶0215')&&s.includes('¶0218')&&s.includes('爻象')?'已核对章节（爻象 ¶0215–¶0218）存在':'缺失')"
 ```
 
-来源页 `wiki/sources/src-a76b03f471fe.md` 已回原件核对「第五章 爻象·爻位 第一节 爻象」（`¶0215–¶0218`）并编入 4 条 `source_claim`；其余章节标 `needs_review`，不把「全文已提取」当「规则已核对」。
-
-## 故障注入（临时改名原件、用完恢复）
+来源页 `wiki/sources/src-a76b03f471fe.md` 已回原件核对「第五章 爻象·爻位 第一节 爻象」的四组爻位类象（`¶0215`–`¶0217` 前两句）并编入 4 条 `source_claim`；其余章节标 `needs_review`，不把「全文已提取」当「规则已核对」。
 
 ## 故障注入（只在临时解包副本运行，不改动工作区原件）
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
+$zip = (Get-ChildItem 'dist\liuyao-wiki-batch1-*-corpus.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 $reloc = 'storage\tmp\unpack-faultinject'
-Remove-Item -Recurse -Force $reloc -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $reloc | Out-Null
+# 先核验绝对目标确实位于项目内 storage\tmp 下，避免误删
+$tmpRoot = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) 'storage\tmp'))
+$relocAbs = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $reloc))
+if (-not $relocAbs.StartsWith($tmpRoot + [System.IO.Path]::DirectorySeparatorChar)) { throw "拒绝删除：$relocAbs 不在 $tmpRoot 下" }
+if (Test-Path $relocAbs) { Remove-Item -Recurse -Force $relocAbs }
+New-Item -ItemType Directory -Force -Path $relocAbs | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path "dist\liuyao-wiki-batch1-ead9ad0b-corpus.zip").Path, (Resolve-Path $reloc).Path)
-$env:LIUYAO_PROJECT_ROOT = (Resolve-Path $reloc).Path
+[System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $zip).Path, $relocAbs)
+$env:LIUYAO_PROJECT_ROOT = $relocAbs
 node --import ./app/scripts/lib/register-ts.mjs app/scripts/check-wiki-batch1-faultinject.mjs
+$faultExit = $LASTEXITCODE
 $env:LIUYAO_PROJECT_ROOT = $null
+"故障注入退出码 = $faultExit"     # 保留真实退出码
 ```
 
-预期 6/6：缺原件 / 篡改原件 / 缺清洗文件 → `src-777319b69476` 不可引用，恢复后重新可引用。故障注入脚本只在 `LIUYAO_PROJECT_ROOT` 指向的临时副本内改名/恢复，不改动工作区私有原件。
+预期 6/6、退出码 0：缺原件 / 篡改原件 / 缺清洗文件 → `src-777319b69476` 不可引用，恢复后重新可引用。故障注入脚本只在 `LIUYAO_PROJECT_ROOT` 指向的临时副本内改名/恢复，不改动工作区私有原件。
 
 ## 私有资料包
 
