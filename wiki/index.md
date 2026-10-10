@@ -7,7 +7,7 @@
 - [Wiki 编写规则](schema.md)：条目类型、出处、状态和冲突的记录方式。
 - [资料处理目录](../corpus/README.md)：原件、提取文本、清洗文本、图片与质量报告的位置。
 - [资料清单（manifest）](../corpus/manifest.jsonl)：每份来源的哈希、处理方式与覆盖范围（机器可读）。
-- 概念页：[取用神](concepts/yongshen.md)（5 个来源的正文证据，并列不合并）、[六神临六亲取象](concepts/liushen-liuqin.md)（单一来源取象词典）、[断卦技法](concepts/duangua-jifa.md)（基础口诀与实例，卦例 `needs_review`）。
+- 概念页：[取用神](concepts/yongshen.md)（5 个来源的正文证据，并列不合并）、[六神临六亲取象](concepts/liushen-liuqin.md)（单一来源取象词典）、[断卦技法](concepts/duangua-jifa.md)（基础口诀与实例，卦例 `needs_review`）、[爻象·爻位](concepts/yaoxiang-yaowei.md)（讲义已核对章节，`needs_review`）。
 - 对照页：[梅花易数起卦与六爻断卦的边界](comparisons/meihua-vs-liuyao.md)（真实分歧，并列不裁决）。
 - [维护记录](log.md)：每次编入或修订的记录。
 

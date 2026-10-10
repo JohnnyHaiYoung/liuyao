@@ -2,10 +2,10 @@
   "catalogVersion": "wiki-catalog.v1",
   "generatedFrom": {
     "indexPath": "wiki/index.md",
-    "indexSha256": "c3e2e2bdbdd84eb6bbf8cd7a99759c760bad78fd9a6d02c65060f25f7fece6fb",
+    "indexSha256": "ad2cdc50df39591e30a888df92cbc71022019e174b98d00788c514f0eee52ca0",
     "note": "由 app/scripts/build-wiki-catalog.mjs 生成；不写入时间戳以保证 --check 可做漂移检测"
   },
-  "pageCount": 16,
+  "pageCount": 17,
   "pages": [
     {
       "pageId": "comparison:meihua-vs-liuyao",
@@ -89,6 +89,37 @@
       "applicableQuestions": [],
       "bytes": 2412,
       "sha256": "f0bbfdc8a003e3b4b277be8d22fb8eec13abaed8176db2854809b0553f8fc09c"
+    },
+    {
+      "pageId": "concept:yaoxiang-yaowei",
+      "path": "wiki/concepts/yaoxiang-yaowei.md",
+      "kind": "concept",
+      "title": "爻象·爻位",
+      "displayName": "爻象·爻位",
+      "topics": [
+        "占人身的爻位类象",
+        "占家宅的爻位类象",
+        "占政事的爻位类象",
+        "占盗贼/身体的爻位类象",
+        "未核实与边界"
+      ],
+      "aliases": [
+        "占家宅初爻",
+        "爻位",
+        "爻位怎么看家宅",
+        "爻位类象",
+        "爻象",
+        "爻象怎么解释"
+      ],
+      "methodLabels": [],
+      "sourceIds": [
+        "src-a76b03f471fe"
+      ],
+      "qualityStatus": "needs_review",
+      "qualityRank": 1,
+      "applicableQuestions": [],
+      "bytes": 2328,
+      "sha256": "daa08819f211b201dc6b36c526d2755aa2fd1b3920e4bde514a0a8c753f80dd1"
     },
     {
       "pageId": "concept:yongshen",
@@ -330,8 +361,8 @@
       "qualityStatus": "needs_review",
       "qualityRank": 1,
       "applicableQuestions": [],
-      "bytes": 4616,
-      "sha256": "568ea13d0447424aa188e5519985eb3de82c3392c8e7a82e98f18ebd01cba5e4"
+      "bytes": 4978,
+      "sha256": "bd3030236d854ee1ebb0ba89db1ad64a351e0874ea5b01137d9d3b20027dc496"
     },
     {
       "pageId": "source:src-e6fc8612e955",

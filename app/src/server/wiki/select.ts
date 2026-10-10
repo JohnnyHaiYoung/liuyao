@@ -142,10 +142,10 @@ function buildExcerpt(text: string, terms: string[], maxChars: number): { excerp
   const focus: { index: number; weight: number }[] = [];
   for (const [index, line] of lines.entries()) {
     let weight = 0;
-    if (/¶\d{4}/.test(line)) weight += 3;
+    if (/¶\d{4}/.test(line)) weight += 10; // 段落锚点行是"主张"所在，优先于目录/元数据行（复验 2f31a08 P1-2）
     if (/第\s*\d+\s*页/.test(line)) weight += 2;
     for (const term of terms.slice(0, 40)) {
-      if (term.length >= 3 && line.includes(term)) weight += 1;
+      if (term.length >= 2 && line.includes(term)) weight += 1;
     }
     if (weight > 0) focus.push({ index, weight });
   }

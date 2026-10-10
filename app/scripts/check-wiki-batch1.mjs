@@ -2,6 +2,7 @@
 // 运行：node --import ./app/scripts/lib/register-ts.mjs app/scripts/check-wiki-batch1.mjs
 import { resolveProjectRoot, loadCatalog, loadSourceManifest, readCatalogPage } from '../src/server/wiki/catalog.ts';
 import { describeWikiCoverage, findCoverageFiles } from '../src/server/wiki/coverage.ts';
+import { selectWikiEvidence } from '../src/server/wiki/select.ts';
 
 let pass = 0;
 let fail = 0;
@@ -96,6 +97,14 @@ check('讲义来源页标 needs_review 且明说正文未逐段核对', txSrc.in
 check('讲义已核对章节「爻象」标起止 ¶0215–¶0218', txSrc.includes('¶0215') && txSrc.includes('¶0218') && txSrc.includes('爻象'), '');
 const dgSrc = readCatalogPage(root, catalog.pages.find((p) => p.pageId === 'source:src-fd45fbed3007')).text;
 check('断卦技法卦例段（¶0018–¶0028）标 needs_review、不得当已核对规则', dgSrc.includes('¶0018') && dgSrc.includes('needs_review') && (dgSrc.includes('不代表案例可核实') || dgSrc.includes('不得作为可验证案例')), '');
+
+// P1-2：自然问法选页——讲义爻象/爻位类象能被选中且摘录含主张、定位、质量提醒
+const selYao = selectWikiEvidence(root, catalog, '爻象怎么解释？');
+const selYaoHit = selYao.snippets.find((s) => s.sourceId === 'src-a76b03f471fe');
+check('「爻象怎么解释？」选中讲义且摘录含「初爻为足」、定位 ¶0215、质量 needs_review', Boolean(selYaoHit && selYaoHit.citable && selYaoHit.locatorValue === '¶0215' && selYaoHit.qualityStatus === 'needs_review' && selYaoHit.excerpt.includes('初爻为足')), selYaoHit ? `${selYaoHit.locatorValue}/${selYaoHit.citable}` : '未选中');
+const selJia = selectWikiEvidence(root, catalog, '爻位类象怎么看家宅？');
+const selJiaHit = selJia.snippets.find((s) => s.sourceId === 'src-a76b03f471fe');
+check('「爻位类象怎么看家宅？」摘录含「初爻为井」、定位 ¶0215、质量 needs_review', Boolean(selJiaHit && selJiaHit.citable && selJiaHit.locatorValue === '¶0215' && selJiaHit.qualityStatus === 'needs_review' && selJiaHit.excerpt.includes('初爻为井')), selJiaHit ? `${selJiaHit.locatorValue}/${selJiaHit.citable}` : '未选中');
 
 console.log(`\n合计：${pass}/${pass + fail} 通过，${fail} 项不通过`);
 process.exit(fail === 0 ? 0 : 1);
