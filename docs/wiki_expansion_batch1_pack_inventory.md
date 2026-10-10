@@ -1,9 +1,9 @@
 # 本地 Wiki 第一批 · 私有资料包清单
 
-- 绑定提交：`cf59d288`（复验修复后 HEAD；资料包内容与 `eb2fc77d` 一致，仅提交号前移——本轮改动均为 app 代码，corpus/wiki 数据未变，故归档哈希不变）
-- 归档文件：`dist/liuyao-wiki-batch1-cf59d288-corpus.zip`
-- 归档 SHA-256：`336eec7908d79c86810ff3bb522ca024798bcb2f943ac04edea498068ccd3392`
-- 文件数：149；字节：9,345,196（含阶段 2 六份 + 第一批四份的全部 corpus/wiki/目录）
+- 绑定提交：`ead9ad0b`（含新增「爻象·爻位」概念页、收窄已核对范围后的来源页/目录/报告）
+- 归档文件：`dist/liuyao-wiki-batch1-ead9ad0b-corpus.zip`
+- 归档 SHA-256：`09c31228eff616a0dc3dd601e47f7c645c115f574272262d19a355eb9d43a874`
+- 文件数：150；字节：9,347,578（含阶段 2 六份 + 第一批四份的全部 corpus/wiki/目录）
 - 包内清单文件：`PACK-MANIFEST.txt`（逐文件 SHA-256）
 
 ## 四份原件（在包内、哈希与 manifest 一致，不依赖 F 盘）
