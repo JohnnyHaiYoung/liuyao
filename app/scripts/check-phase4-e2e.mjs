@@ -187,6 +187,18 @@ console.log('\n=== 4) 旧卦追问（沿用快照，不重算） ===');
     fChart?.data?.action === 'follow_up' && fChart?.data?.chartRunId === chartRunId,
     `${fChart?.data?.action} ${String(fChart?.data?.chartRunId).slice(0, 8)}…`,
   );
+
+  // 复验 P1-1：连续两轮引用对照——"这次引用了什么"读上一答持久化引用快照，与 done.sourceIds 一致
+  const prevDone = followUpHowTo.events.find((item) => item.event === 'done');
+  const prevSourceIds = Array.isArray(prevDone?.data?.sourceIds) ? prevDone.data.sourceIds : [];
+  const citeAsk = await send('这次引用了什么？');
+  const citeText = citeAsk.events.filter((item) => item.event === 'delta').map((item) => item.data.text).join('');
+  const citedFromPrev = prevSourceIds.every((sid) => citeText.includes(sid));
+  check(
+    '「这次引用了什么」读上一答引用快照（与 done.sourceIds 一致）',
+    prevSourceIds.length > 0 && citedFromPrev && citeText.includes('上一答'),
+    `prevSourceIds=[${prevSourceIds.join(',')}] 答复含=${citedFromPrev}`,
+  );
 }
 
 console.log('\n=== 5) 缺项只追问（不调用模型） ===');
