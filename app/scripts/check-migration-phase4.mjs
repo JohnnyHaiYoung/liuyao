@@ -75,11 +75,21 @@ check('迁移器已应用 0001 与 0002', applied.some((m) => m.version === 1) &
 const after = readSnapshot(db);
 check('旧消息一行未少、内容未变', JSON.stringify(after.messages) === JSON.stringify(before.messages), `消息 ${before.messages.length} → ${after.messages.length}`);
 check('旧会话标题/来源未变', JSON.stringify(after.conversations) === JSON.stringify(before.conversations), `会话 ${before.conversations.length} 个`);
-check('新增 chart_runs 表', after.tables.includes('chart_runs') && !before.tables.includes('chart_runs'), 'chart_runs');
-check('新增 message_sources 表', after.tables.includes('message_sources') && !before.tables.includes('message_sources'), 'message_sources');
-check('messages 新增 chart_run_id/plan_json', ['chart_run_id', 'plan_json'].every((column) => after.messageColumns.includes(column) && !before.messageColumns.includes(column)), after.messageColumns.join(','));
+// 复验（wiki 第一批 P2-2）：正式库可能已应用 0002（阶段 4 之后的状态）。此时迁移器为幂等 no-op，
+// 断言改为"表/列仍在"，而不是"迁移前不存在"。
+const beforeHasPhase4 = before.tables.includes('chart_runs') && before.tables.includes('message_sources');
+if (beforeHasPhase4) {
+  check('chart_runs 表仍在（旧库已含 0002，幂等）', after.tables.includes('chart_runs'), '');
+  check('message_sources 表仍在（旧库已含 0002，幂等）', after.tables.includes('message_sources'), '');
+  check('messages 仍有 chart_run_id/plan_json', ['chart_run_id', 'plan_json'].every((column) => after.messageColumns.includes(column)), after.messageColumns.join(','));
+  check('conversations 仍有 current_chart_run_id', after.conversationColumns.includes('current_chart_run_id'), '');
+} else {
+  check('新增 chart_runs 表', after.tables.includes('chart_runs') && !before.tables.includes('chart_runs'), 'chart_runs');
+  check('新增 message_sources 表', after.tables.includes('message_sources') && !before.tables.includes('message_sources'), 'message_sources');
+  check('messages 新增 chart_run_id/plan_json', ['chart_run_id', 'plan_json'].every((column) => after.messageColumns.includes(column) && !before.messageColumns.includes(column)), after.messageColumns.join(','));
+  check('conversations 新增 current_chart_run_id', after.conversationColumns.includes('current_chart_run_id') && !before.conversationColumns.includes('current_chart_run_id'), '');
+}
 check('提示版本字段沿用阶段 1 既有列（0002 不重复添加）', before.messageColumns.includes('prompt_version') && after.messageColumns.includes('prompt_version'), 'prompt_version');
-check('conversations 新增 current_chart_run_id', after.conversationColumns.includes('current_chart_run_id') && !before.conversationColumns.includes('current_chart_run_id'), '');
 check('旧消息的 chart_run_id 为空（读出即“无盘”）', db.prepare('SELECT COUNT(*) AS c FROM messages WHERE chart_run_id IS NOT NULL').get().c === 0, '');
 
 console.log('\n=== 2) 幂等：重复应用迁移不重复执行 ===');
