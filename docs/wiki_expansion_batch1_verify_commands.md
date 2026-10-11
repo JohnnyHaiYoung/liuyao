@@ -1,7 +1,7 @@
 # 本地 Wiki 第一批 · 复验命令与预期（供独立验收方）
 
-- 交付基线：`wiki-batch1`（自 `main@e5e8b31` 分叉，未合并 `main`）；功能提交 `fba824d2`（资料包绑定此提交）
-- 上轮复验：`docs/wiki_expansion_batch1_reacceptance_2f31a08_2026-10-10.md`
+- 交付基线：`wiki-batch1`（自 `main@e5e8b31` 分叉，未合并 `main`）最新提交；**功能提交 `fba824d2`（私有资料包绑定此提交）**
+- 上轮复验：`docs/wiki_expansion_batch1_reacceptance_caedfb8_2026-10-10.md`（上一轮 `2f31a08`；本文件对应 `1bae29a` 及之后收尾提交）
 - 交付说明：`docs/wiki_expansion_batch1_delivery.md`；私有资料包清单：`docs/wiki_expansion_batch1_pack_inventory.md`
 - 性质：**研发自测材料，非签收结论**；本批资料独立验收后由第五阶段在冻结版本对齐，不自行进入正式发布包。
 
@@ -9,7 +9,7 @@
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
-git rev-parse --short HEAD            # 应为 fba824d2（功能提交；交付基线为 wiki-batch1 最新提交）
+git rev-parse --short HEAD            # 交付 HEAD = wiki-batch1 最新提交（git log -1 --format=%h）；功能提交 fba824d2
 
 node tools\corpus-cli.ts verify
 node app\scripts\build-wiki-catalog.mjs --check
@@ -20,7 +20,7 @@ node --import ./app/scripts/lib/register-ts.mjs app/scripts/check-phase4-e2e.mjs
 cd app; npm run typecheck; npm run build
 ```
 
-预期：`verify 132/0/0`；目录 17 页一致；`batch1 36/36`；`migration 30/30`；`orchestration 107/107`；`e2e 67/67`；typecheck/build 退出码 0。
+预期：`verify 132/0/0`；目录 17 页一致；`batch1 37/37`；`migration 30/30`；`orchestration 107/107`；`e2e 67/67`；typecheck/build 退出码 0。
 
 ## 引用追问五种问法（复验 04e77bd P1）
 
@@ -31,19 +31,20 @@ node --import ./app/scripts/lib/register-ts.mjs --input-type=module -e "const {l
 
 预期：5 问都列出 `S1（src-777319b69476 ¶0002）｜质量：usable`；去掉 `previousCitations` 后输出「无可用引用」。聊天服务与 planner 共用 `isCitationFollowup()`（`planner.ts` 导出、`stream-service.ts` 导入），不再各自复制正则。
 
-## 长讲义已核对章节（复验 04e77bd 第 2 项）
+## 长讲义已核对章节（复验 caedfb8 第 2 项）
 
 ```powershell
-node -e "const s=require('fs').readFileSync('wiki/sources/src-a76b03f471fe.md','utf8');console.log(s.includes('¶0215')&&s.includes('¶0218')&&s.includes('爻象')?'已核对章节（爻象 ¶0215–¶0218）存在':'缺失')"
+cd E:\workspace-ai\xuanxue\liuyao
+node -e "const s=require('fs').readFileSync('wiki/sources/src-a76b03f471fe.md','utf8');const ok=s.includes('¶0215')&&s.includes('¶0217')&&/¶0218[^\n]*未核对/.test(s)&&!s.includes('¶0215–¶0218');console.log(ok?'四组主张（¶0215–¶0217 前两句）已核对、¶0218 未核对':'范围表述不准确');process.exit(ok?0:1)"
 ```
 
-来源页 `wiki/sources/src-a76b03f471fe.md` 已回原件核对「第五章 爻象·爻位 第一节 爻象」的四组爻位类象（`¶0215`–`¶0217` 前两句）并编入 4 条 `source_claim`；其余章节标 `needs_review`，不把「全文已提取」当「规则已核对」。
+断言 `¶0215`、`¶0217` 已核对、`¶0218` 明确未核对，且不得出现把 `¶0215–¶0218` 整段写为已核对的旧表述；失败返回非零。来源页已回原件核对「第五章 爻象·爻位 第一节 爻象」的四组爻位类象（`¶0215`–`¶0217` 前两句）并编入 4 条 `source_claim`；其余章节标 `needs_review`。
 
 ## 故障注入（只在临时解包副本运行，不改动工作区原件）
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
-$zip = (Get-ChildItem 'dist\liuyao-wiki-batch1-*-corpus.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+$zip = 'dist\liuyao-wiki-batch1-fba824d2-corpus.zip'   # 明确本次交付包，不用"最近修改"猜测
 $reloc = 'storage\tmp\unpack-faultinject'
 # 先核验绝对目标确实位于项目内 storage\tmp 下，避免误删
 $tmpRoot = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) 'storage\tmp'))
@@ -57,7 +58,8 @@ $env:LIUYAO_PROJECT_ROOT = $relocAbs
 node --import ./app/scripts/lib/register-ts.mjs app/scripts/check-wiki-batch1-faultinject.mjs
 $faultExit = $LASTEXITCODE
 $env:LIUYAO_PROJECT_ROOT = $null
-"故障注入退出码 = $faultExit"     # 保留真实退出码
+if ($faultExit -ne 0) { throw "故障注入失败：退出码 $faultExit" }   # 失败返回非零退出码
+"故障注入退出码 = 0"
 ```
 
 预期 6/6、退出码 0：缺原件 / 篡改原件 / 缺清洗文件 → `src-777319b69476` 不可引用，恢复后重新可引用。故障注入脚本只在 `LIUYAO_PROJECT_ROOT` 指向的临时副本内改名/恢复，不改动工作区私有原件。
