@@ -92,6 +92,14 @@ const CAST_STRONG_PATTERN = new RegExp(
 const CAST_STRONG_ACTIONS = ['起一卦', '摇一卦', '占一卦', '卜一卦', '看一卦', '摇卦', '排一卦', '算一卦', '求一卦', '看这卦'];
 
 /**
+ * 口语起卦（不带"卦"字的动词叠用 + 占断对象）：「算一算明天的事运」「算算事业」「卜一卜感情」。
+ * 只匹配占断类对象（事运/运势/感情/事业…），避免把「算一算账」「算算房租」这类非占断当起卦。
+ */
+const CAST_REDUP_WORDS = '算一算|算算|占一占|占占|卜一卜|卜卜|摇一摇|摇摇|排一排|排排';
+const DIVINATION_OBJECTS = '事运|运势|运气|运程|命运|感情|姻缘|事业|财运|前程|前途|未来|婚姻|健康|考试|工作|吉凶|缘分|运|命';
+const CAST_COLLOQUIAL_PATTERN = new RegExp(`(?:${CAST_REDUP_WORDS})[^。；！？]{0,6}(?:${DIVINATION_OBJECTS})`);
+
+/**
  * 第二层：**方法/知识类问法**（只有在没有起卦动作时才用于分类）。
  * 依旧要求"比较/区别/是什么…"与方法术语邻近，避免把现实对象当成知识体系比较。
  */
@@ -166,6 +174,8 @@ export function isCastRequestClause(clause: string): boolean {
   if (HOW_TO_PATTERN.test(trimmed)) return false;
   // 句首祈使（请/来/现在…起一卦）或"帮我/请帮…起卦"：明确"现在起卦"，不被后置知识词否决
   if (REQUEST_IMPERATIVE_PATTERN.test(trimmed) || LEADING_IMPERATIVE_PATTERN.test(trimmed)) return true;
+  // 口语起卦（不带"卦"字）："算一算明天的事运""算算事业""卜一卜感情"——明确占断意图，先于动作词位置判断
+  if (CAST_COLLOQUIAL_PATTERN.test(trimmed)) return true;
   const action = CLAUSE_FIRST_ACTION_PATTERN.exec(trimmed);
   if (!action) return false;
   const beforeAction = trimmed.slice(0, action.index);
@@ -357,7 +367,7 @@ export function planTurn(params: PlanTurnParams): PlanTurnResult {
   // 复验报告 P1-1：先前只在已提取到爻值/历法时才走缺项检查，导致"帮我起卦""另起一卦""请帮我看卦"
   // 会直接进入模型回答。这里补上起卦意图分支，并排除"比较/概念"类问法（例如"梅花起卦与六爻断卦怎么比较"）。
   // 先识别"用户当前要执行的动作"：按**子句**分别判断"现在起卦"与"讲知识"（复验报告 2250d0d P1）
-  const hasCastAction = hasCastRequest || CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker));
+  const hasCastAction = hasCastRequest || CAST_ACTION_PATTERN.test(question) || CAST_STRONG_ACTIONS.some((marker) => question.includes(marker)) || CAST_COLLOQUIAL_PATTERN.test(question);
   const hasRequestImperative = hasCastRequest || REQUEST_IMPERATIVE_PATTERN.test(question);
   const knowledgeAboutCast = KNOWLEDGE_ABOUT_CAST_PATTERN.test(question);
   const castThenKnowledge = CAST_THEN_KNOWLEDGE_PATTERN.test(question);
