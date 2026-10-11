@@ -1,6 +1,6 @@
 # 本地 Wiki 第一批 · 复验命令与预期（供独立验收方）
 
-- 交付基线：`wiki-batch1`（自 `main@e5e8b31` 分叉，未合并 `main`）最新提交；**功能提交 `fba824d2`（私有资料包绑定此提交）**
+- 交付基线：`wiki-batch1`（自 `main@e5e8b31` 分叉，未合并 `main`）最新提交；**资料包绑定功能提交 `55eb3d14`**
 - 上轮复验：`docs/wiki_expansion_batch1_reacceptance_caedfb8_2026-10-10.md`（上一轮 `2f31a08`；本文件对应 `1bae29a` 及之后收尾提交）
 - 交付说明：`docs/wiki_expansion_batch1_delivery.md`；私有资料包清单：`docs/wiki_expansion_batch1_pack_inventory.md`
 - 性质：**研发自测材料，非签收结论**；本批资料独立验收后由第五阶段在冻结版本对齐，不自行进入正式发布包。
@@ -9,7 +9,7 @@
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
-git rev-parse --short HEAD            # 交付 HEAD = wiki-batch1 最新提交（git log -1 --format=%h）；功能提交 fba824d2
+git rev-parse --short HEAD            # 交付 HEAD = wiki-batch1 最新提交（git log -1 --format=%h）；功能/资料包提交 55eb3d14
 
 node tools\corpus-cli.ts verify
 node app\scripts\build-wiki-catalog.mjs --check
@@ -44,7 +44,7 @@ node -e "const s=require('fs').readFileSync('wiki/sources/src-a76b03f471fe.md','
 
 ```powershell
 cd E:\workspace-ai\xuanxue\liuyao
-$zip = 'dist\liuyao-wiki-batch1-fba824d2-corpus.zip'   # 明确本次交付包，不用"最近修改"猜测
+$zip = 'dist\liuyao-wiki-batch1-55eb3d14-corpus.zip'   # 明确本次交付包，不用"最近修改"猜测
 $reloc = 'storage\tmp\unpack-faultinject'
 # 先核验绝对目标确实位于项目内 storage\tmp 下，避免误删
 $tmpRoot = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) 'storage\tmp'))
@@ -67,10 +67,10 @@ if ($faultExit -ne 0) { throw "故障注入失败：退出码 $faultExit" }   # 
 ## 私有资料包
 
 ```powershell
-Get-FileHash dist\liuyao-wiki-batch1-fba824d2-corpus.zip -Algorithm SHA256
+Get-FileHash dist\liuyao-wiki-batch1-55eb3d14-corpus.zip -Algorithm SHA256
 ```
 
-预期 SHA-256：`d9d996026765c6642640d65b9cc269215db48eb0c5ad2560e09f4da5e230cfaf`。解包 150 文件、9,347,559 字节；无 F 盘副本 `verify` 为 122 通过 / 10 条预期源盘不可访问警告 / 0 失败；解包副本批次检查 **37/37**、故障注入 **6/6**。包绑定提交 `fba824d2`。
+预期 SHA-256：`beb60bead2f7edf39e3fe958df4468df5a648f0b39ec2f253d750b0ab9098df6`。解包 150 文件、9,347,591 字节；无 F 盘副本 `verify` 为 122 通过 / 10 条预期源盘不可访问警告 / 0 失败；解包副本批次检查 **37/37**、故障注入 **6/6**。包绑定提交 `55eb3d14`。
 
 ## 边界与遗留
 
